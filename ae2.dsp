@@ -66,5 +66,5 @@ audible_ecosystemic_2 = signal_flow_1a(var1,var2) <: si.bus(30) :
           !,!,_,_ :
           signal_flow_3(var4);
 
-// TEST mono IN and mono OUT
-process = _*(1/4) <: audible_ecosystemic_2 :> _*(1/6);
+process = audible_ecosystemic_2;
+// process = _*(1/4) <: audible_ecosystemic_2 :> _*(1/6);

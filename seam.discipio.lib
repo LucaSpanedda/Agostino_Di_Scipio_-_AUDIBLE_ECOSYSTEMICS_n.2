@@ -20,12 +20,27 @@ mapcond(x) = select2(x>0.5,1, (1-x)*2);
 // returns the average absolute value over a specific time frame
 // (one may use RMS measures, instead, or other amplitude-following methods);
 // output range is [0, 1]
-integrator(s) = an.amp_follower(s);
+movingAverage(seconds, x) = x - (x @ N) : fi.pole(1.0) / N
+    with {
+        N = seconds * ma.SR;
+    };
+
+RMSRectangular(seconds, x) = sqrt(max(0, movingAverage(seconds, x * x)));
+
+integrator(seconds, x) = RMSRectangular(seconds, x);
 //----------------------------------------------------------------- LOCALMAX ---
 // returns the maximum signal amplitude (absolute value) in a given time frame;
 // frame duration is dynamically adjusted: the next frame duration is set at the
 // end of the previous frame
-localmax(frame) = ba.peakholder(frame);
+peakHolder(resetPeriod, x) = y
+    letrec {
+        'y = ba.if(reset, abs(x), max(y, abs(x)));
+    }
+        with {
+            reset = os.phasor(1, 1.0 / resetPeriod) : \(x).(x < x');
+        };
+
+localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
 //--------------------------------------------------------------- SAMPLEREAD ---
 sampleread(var1,ratio, memchunk, sig) =
 // delay frazionario                * crossfade
@@ -36,24 +51,82 @@ with {
     xfade = 128;
 	d = (1 - ratio : si.smoo) : (+ : +(bufsize) : fmod(_,bufsize)) ~ _;
 };
+//----------------------------------------------------------------- TRIANGLE ---
+triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
+triangleWave(f) = triangularFunc(os.phasor(1,f));
+// TEST
+// process = triangleWave(10);
+//------------------------------------------------------------------ FILTERS ---
+// TPT version of the SVF Filter by Vadim Zavalishin
+// reference : (by Will Pirkle)
+// http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
+// SVFTPT filter function
+
+SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
+    with {
+        g = tan(CF * ma.PI / ma.SR);
+        R = 1.0 / (2.0 * Q);
+        G1 = 1.0 / (1.0 + 2.0 * R * g + g * g);
+        G2 = 2.0 * R + g;
+
+        circuit(s1, s2) = u1 , u2 , lp , hp , bp, notch, apf, ubp, peak, bshelf
+            with {
+                hp = (x - s1 * G2 - s2) * G1;
+                v1 = hp * g;
+                bp = s1 + v1;
+                v2 = bp * g;
+                lp = s2 + v2;
+                u1 = v1 + bp;
+                u2 = v2 + lp;
+                notch = x - ((2*R)*bp);
+                apf = x - ((4*R)*bp);
+                ubp = ((2*R)*bp);
+                peak = lp -hp;
+                bshelf = x + (((2*K)*R)*bp);
+            };
+    // choose the output from the SVF Filter (ex. bshelf)
+    circuitout = circuit ~ si.bus(2);
+    };
+// Outs = (lp , hp , bp, notch, apf, ubp, peak, bshelf)
+// SVFTPT(K, Q, CF, x) = (Filter-K, Filter-Q, Frequency Cut)
+
+// Filters Bank
+LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
+HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
+BPsvf(K, Q, CF, x) = SVFTPT(K : ba.db2linear, Q : ba.db2linear, CF, x) : !,!,_,!,!,!,!,!;
+
+// Order Aproximations - Outs
+LP1(CF, x) = x : LPsvf(CF);
+HP1(CF, x) = x : HPsvf(CF);
+LP2(CF, x) = x : LPsvf(CF);
+HP2(CF, x) = x : HPsvf(CF);
+LP3(CF, x) = x : LPsvf(CF);
+HP3(CF, x) = x : HPsvf(CF);
+LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
+HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
+LP5(CF, x) = x : LPsvf(CF) : LPsvf(CF);
+HP5(CF, x) = x : HPsvf(CF) : HPsvf(CF);
+BP2POLES(K, Q, CF, x) = BPsvf(K, Q, CF, x);
+// TEST
+// process = no.noise : LP4(((os.osc(2)+1)/2)*400);
+
 //-------------------------------------------------------- GRANULAR SAMPLING ---
-// read sample sequences off subsequent buffer memory chunks, and envelopes the
-// signal chunk with a pseudo-Gaussian envelope curve; the particular
-// implementation should allow for time-stretching (slower memory pointer
-// increments at grain level), as well as for "grain density" controls and
-// slight random deviations ("jitter") on grain parameters; no frequency shift
-// necessary
 
 /*
+read sample sequences off subsequent buffer memory chunks, and envelopes the
+signal chunk with a pseudo-Gaussian envelope curve; the particular
+implementation should allow for time-stretching (slower memory pointer
+increments at grain level), as well as for "grain density" controls and
+slight random deviations ("jitter") on grain parameters; no frequency shift
+necessary
+
 Granular Sampling -
 version with - Overlap Add To One - Granulator
 for:
 Agostino Di Scipio - AUDIBLE ECOSYSTEMICS
 n.2a / Feedback Study (2003)
 n.2b / Feedback Study, sound installation (2004).
-*/
 
-/*
 - mem.pointer is the pointer to the next location in the memory
     buffer; in the present notation, it varies between -1 (beginning
     of buffer) and 1 (end of buffer)

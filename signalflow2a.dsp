@@ -22,19 +22,21 @@ signal_flow_2a(
               ) =
               (_ <:
                   (sds.sampleread(var1, ratio1, memchunk1), sds.sampleread(var1, ratio2, memchunk2), sds.sampleread(var1, ratio3, memchunk3) :
-                  par(i,3,fi.highpass(4,50)) :
+                  par(i,3,HP4(50)) :
                   si.bus(2), (_<: _,_):
-                    de.delay(sds.delMax,pm.l2s(var1)/2),
-                    de.delay(sds.delMax,pm.l2s(var1)),
-                    (_<: fi.svf.bp(1000,1), fi.svf.bp(2000,1)),
+                    de.delay(sds.delMax,pm.l2s(var1)/2), 
+                    de.delay(sds.delMax,pm.l2s(var1)), 
+                    (_<: 
+                    BP2POLES(0, ((var2 / 2) * memWriteDel2), (diffHL * 400) ), 
+                    BP2POLES(0, (var2 * (1 - memWriteDel1)),  ((1 - diffHL) * 800) ) ),
                     de.delay(sds.delMax, pm.l2s(var1)/1.5)  :> (si.bus(4) :>
                   _*(cntrlFeed)*(memWriteLev) <:
-                  _,_ : (_,(mic1 : sfi.hp1(50) : sfi.lp1p(6000) *(1-cntrlMic1)),(mic2 : sfi.hp1(50) : sfi.lp1p(6000) *(1-cntrlMic2)) <:
+                  _,_ : (_,(mic1 : HP1(50) : LP1(6000) * (1-cntrlMic1)),(mic2 : HP1(50) : LP1(6000) *(1-cntrlMic2)) <:
                    _,_,_,_,_,_ : (_,_,_ :> *(triangle1)), !,*(directLevel),*(directLevel)) ,(*(memWriteLev) <:
-                  (de.delay(sds.delMax,(0.05*ba.sec2samp(cntrlMain))) *(triangle2)*(directLevel)),
-                  *(1-triangle2)*(directLevel))),_),
-                  (sds.sampleread(var1, ratio4, memchunk4) : fi.highpass(4,50) : de.delay(sds.delMax,pm.l2s(var1)/3)),
-                (sds.sampleread(var1, ratio5, memchunk5) : fi.highpass(4,50) : de.delay(sds.delMax,pm.l2s(var1)/2.5)) )~_ :
+                  (de.delay(sds.delMax,(0.05*ba.sec2samp(cntrlMain))) * (triangle2)*(directLevel)),
+                  * (1-triangle2)*(directLevel))),_),
+                  (sds.sampleread(var1, ratio4, memchunk4) : HP4(50) : de.delay(sds.delMax,pm.l2s(var1)/3)),
+                (sds.sampleread(var1, ratio5, memchunk5) : HP4(50) : de.delay(sds.delMax,pm.l2s(var1)/2.5)) )~_ :
                   _,si.bus(7) : si.bus(5),ro.crossNM(1,2)
 
               with{
