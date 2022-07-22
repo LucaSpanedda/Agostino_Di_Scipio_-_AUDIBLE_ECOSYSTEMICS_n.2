@@ -93,20 +93,18 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvf(K, Q, CF, x) = SVFTPT(K : ba.db2linear, Q : ba.db2linear, CF, x) : !,!,_,!,!,!,!,!;
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x) : !,!,_,!,!,!,!,!
+    with{
+        Q = CF / BW;
+        };
 
 // Order Aproximations - Outs
 LP1(CF, x) = x : LPsvf(CF);
 HP1(CF, x) = x : HPsvf(CF);
-LP2(CF, x) = x : LPsvf(CF);
-HP2(CF, x) = x : HPsvf(CF);
-LP3(CF, x) = x : LPsvf(CF);
-HP3(CF, x) = x : HPsvf(CF);
-LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
-HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
-LP5(CF, x) = x : LPsvf(CF) : LPsvf(CF);
-HP5(CF, x) = x : HPsvf(CF) : HPsvf(CF);
-BP2POLES(K, Q, CF, x) = BPsvf(K, Q, CF, x);
+LP2(CF, x) = x : LPsvf(CF) : LPsvf(CF);
+HP2(CF, x) = x : HPsvf(CF) : HPsvf(CF);
+LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF) : LPsvf(CF) : LPsvf(CF);
+HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF) : HPsvf(CF) : HPsvf(CF);
 // TEST
 // process = no.noise : LP4(((os.osc(2)+1)/2)*400);
 

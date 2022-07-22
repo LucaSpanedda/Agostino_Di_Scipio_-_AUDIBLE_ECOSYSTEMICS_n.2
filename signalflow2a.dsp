@@ -27,8 +27,8 @@ signal_flow_2a(
                     de.delay(sds.delMax,pm.l2s(var1)/2), 
                     de.delay(sds.delMax,pm.l2s(var1)), 
                     (_<: 
-                    BP2POLES(0, ((var2 / 2) * memWriteDel2), (diffHL * 400) ), 
-                    BP2POLES(0, (var2 * (1 - memWriteDel1)),  ((1 - diffHL) * 800) ) ),
+                    BPsvftpt( (diffHL * 400), ((var2 / 2) * memWriteDel2) ), 
+                    BPsvftpt( ((1 - diffHL) * 800), (var2 * (1 - memWriteDel1)) ) ),
                     de.delay(sds.delMax, pm.l2s(var1)/1.5)  :> (si.bus(4) :>
                   _*(cntrlFeed)*(memWriteLev) <:
                   _,_ : (_,(mic1 : HP1(50) : LP1(6000) * (1-cntrlMic1)),(mic2 : HP1(50) : LP1(6000) *(1-cntrlMic2)) <:

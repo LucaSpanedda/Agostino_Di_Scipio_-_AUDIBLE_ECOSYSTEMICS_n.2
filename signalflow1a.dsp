@@ -31,8 +31,8 @@ signal_flow_1a(
               _, (_<: _,_,_,_),_ :
               _,_,_,_,* :
               sds.mapsub(_,1,1),
-              (HP3(var2) : integrator(0.05)),
-              (LP3(var2) : integrator(0.1)),
+              (HP2(var2) : integrator(0.05)),
+              (LP2(var2) : integrator(0.1)),
               integrator(0.1),
               integrator(0.01) :
               _,-,_,_ :
@@ -40,7 +40,7 @@ signal_flow_1a(
               sds.delayfb(0.01,0.995),
                 sds.delayfb(0.01,0.9),
                 sds.delayfb(0.01,0.995) :
-              par(i,3,LP5(25)):
+              par(i,3,LP4(25)):
               sds.mapsum(_,0.5,0.5), (( sds.mapsub(_^2,1,1)) <:
               sds.delayfb(var1/2,0),sds.delayfb(var1/3,0),_), (_<: sds.delayfb(var1/3,0),sds.delayfb(var1/2,0), sds.mapcond,_));
 

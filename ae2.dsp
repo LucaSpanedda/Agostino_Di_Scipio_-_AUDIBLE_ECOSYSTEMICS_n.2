@@ -6,7 +6,7 @@ declare author "Davide Tedesco";
 declare author "Giovanni Michelangelo D'urso";
 declare author "Alessandro Malcangi";
 declare license "GNU-GPL-v3";
-declare copyright "(c)SEAM 2022";
+declare copyright "(C)SEAM 2022";
 declare description "Realised on composer's instructions 
 of the year 2017 edited in L’Aquila, Italy";
 //declare options "[midi:on]";
