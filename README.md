@@ -3,7 +3,7 @@ https://github.com/s-e-a-m/fc2003dsaae2
 
 2003 - Agostino Di Scipio - AUDIBLE ECOSYSTEMICS n.2 - FAUST Code
 
-## How to compile the sustainable version of the AUDIBLE ECOSYSTEMICS n.2
+## How to compile
 
 Move into your preferred directory to store github stuff and after the [installation of FAUST](https://faust.grame.fr/downloads/) run this commands:
 ```
