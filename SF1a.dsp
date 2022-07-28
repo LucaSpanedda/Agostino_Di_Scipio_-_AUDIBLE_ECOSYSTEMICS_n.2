@@ -37,6 +37,58 @@ diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed
         cntrlLev2 = cntrlMain : delayfb(var1/2,0);
         cntrlFeed = cntrlMain : mapwshape;
         };
+        /*
+        process = 
+            ( noise(1), 
+              noise(2) )
+                :
+                signalFlow1a;
+                */
+            // OUTS
+            diffHL = signalFlow1a : _,!,!,!,!,!,!,!;
+            memWriteDel1 = signalFlow1a : !,_,!,!,!,!,!,!;
+            memWriteDel2 = signalFlow1a : !,!,_,!,!,!,!,!;
+            memWriteLev = signalFlow1a : !,!,!,_,!,!,!,!;
+            cntrlLev1 = signalFlow1a : !,!,!,!,_,!,!,!;
+            cntrlLev2 = signalFlow1a : !,!,!,!,!,_,!,!;
+            cntrlFeed = signalFlow1a : !,!,!,!,!,!,_,!;
+            cntrlMain = signalFlow1a : !,!,!,!,!,!,!,_;
 
 
-process = noise(1), noise(2) : signalFlow1a;
+signalFlow1b(mic1, mic2, grainOut1, grainOut2, memWriteLev, cntrlMain) = 
+cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
+    with{   
+        cntrlMic(x) = x : HP1(50) : LP1(6000) : integrator(.01) : delayfb(.01,.999) : LP4(.5);
+        cntrlMic1 = mic1 : cntrlMic;
+        cntrlMic2 = mic2 : cntrlMic;
+
+        grainSUM = grainOut1 + grainOut2 : integrator(.01) : delayfb(.01,.97) : LP4(.5);
+        map1minX05(x) = 1 - x * .5;
+        directLevel = grainSUM <: _, delayfb(var1 * 2, (1 - var3) * 0.5) :> + : map1minX05;
+
+        triangleWaveA = triangleWave( 1 / ( var1 * 2 ) ); 
+        triangleWaveB = triangleWave( 1 / ( var1 * 6 ) );
+        triangleWaveC = triangleWave( var1 * (1 - cntrlMain) );
+        triangleWaveD = triangleWave( 1 / var1 );
+        mapXmin2by05(x) = (x - 2) * 0.5;
+        mapXplus1by05(x) = (x + 1) * 0.5;
+
+        timeIndex1 = triangleWaveA : mapXmin2by05;
+        timeIndex2 = triangleWaveA : mapXplus1by05;
+        triangle1 = triangleWaveB * memWriteLev;
+        triangle2 = triangleWaveC;
+        triangle3 = triangleWaveD;
+        };
+        /*
+        process = 
+            ( noise(10), 
+              noise(11), 
+              noise(12), 
+              noise(13), 
+              abs(noise(13))*0.333, 
+              abs(noise(13))*0.92 )
+                :
+                signalFlow1b;
+                */
+
+process = noise(20) <: signalFlow1b( _@300, _@400, _@500, _@600, memWriteLev, cntrlMain);
