@@ -15,11 +15,11 @@ import("seam.discipio.lib");
 //--------------------Four variables are to be initialized prior to performance:
 //VAR1
 //distance (in meters) between the two farthest removed loudspeakers on the left-right axis.
-var1 = 23;
+var1 = 10;
 //VAR2
 //rough estimate of the center frequency in the spectrum of the room’s background noise (spectral centroid):
 //to evaluate at rehearsal time, in a situation of "silence".
-var2 = 1000;
+var2 = 10000;
 //VAR3
 //subjective estimate of how the room revereberance, valued between 0 ("no reverb") and 1 (“very long reverb”).
 var3 = 1000;

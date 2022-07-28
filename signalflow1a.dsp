@@ -44,7 +44,7 @@ signal_flow_1a(
               sds.mapsum(_,0.5,0.5), (( sds.mapsub(_^2,1,1)) <:
               sds.delayfb(var1/2,0),sds.delayfb(var1/3,0),_), (_<: sds.delayfb(var1/3,0),sds.delayfb(var1/2,0), sds.mapcond,_));
 
-process = signal_flow_1a;
+//process = signal_flow_1a;
 
 // TEST
-//process = (10,200,noise(1),noise(2),noise(3),noise(4)) : signal_flow_1a;
+process = (10,200,noise(1),noise(2),noise(3),noise(4)) : signal_flow_1a;
