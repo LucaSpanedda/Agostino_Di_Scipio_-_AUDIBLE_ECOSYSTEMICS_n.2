@@ -4,7 +4,8 @@ import("seam.discipio.lib");
 //Role of the signal flow block: generation of control signals based on mic3 and mic4 input
 
 signalFlow1a(mic3, mic4) = 
-diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
+diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+mic3, mic4
     with{
         micSUM = mic3 + mic4;
 
@@ -45,18 +46,21 @@ diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed
                 signalFlow1a;
                 */
             // OUTS
-            diffHL = signalFlow1a : _,!,!,!,!,!,!,!;
-            memWriteDel1 = signalFlow1a : !,_,!,!,!,!,!,!;
-            memWriteDel2 = signalFlow1a : !,!,_,!,!,!,!,!;
-            memWriteLev = signalFlow1a : !,!,!,_,!,!,!,!;
-            cntrlLev1 = signalFlow1a : !,!,!,!,_,!,!,!;
-            cntrlLev2 = signalFlow1a : !,!,!,!,!,_,!,!;
-            cntrlFeed = signalFlow1a : !,!,!,!,!,!,_,!;
-            cntrlMain = signalFlow1a : !,!,!,!,!,!,!,_;
+            diffHL = signalFlow1a : _,!,!,!,!,!,!,!,!,!;
+            memWriteDel1 = signalFlow1a : !,_,!,!,!,!,!,!,!,!;
+            memWriteDel2 = signalFlow1a : !,!,_,!,!,!,!,!,!,!;
+            memWriteLev = signalFlow1a : !,!,!,_,!,!,!,!,!,!;
+            cntrlLev1 = signalFlow1a : !,!,!,!,_,!,!,!,!,!;
+            cntrlLev2 = signalFlow1a : !,!,!,!,!,_,!,!,!,!;
+            cntrlFeed = signalFlow1a : !,!,!,!,!,!,_,!,!,!;
+            cntrlMain = signalFlow1a : !,!,!,!,!,!,!,_,!,!;
+            mic3 = signalFlow1a : !,!,!,!,!,!,!,!,_,!;
+            mic4 = signalFlow1a : !,!,!,!,!,!,!,!,!,_;
 
 
 signalFlow1b(mic1, mic2, grainOut1, grainOut2, memWriteLev, cntrlMain) = 
-cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
+cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3,
+mic1, mic2
     with{   
         cntrlMic(x) = x : HP1(50) : LP1(6000) : integrator(.01) : delayfb(.01,.999) : LP4(.5);
         cntrlMic1 = mic1 : cntrlMic;
@@ -90,5 +94,47 @@ cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2,
                 :
                 signalFlow1b;
                 */
+            cntrlMic1 = signalFlow1b : _,!,!,!,!,!,!,!,!,!;
+            cntrlMic2 = signalFlow1b : !,_,!,!,!,!,!,!,!,!;
+            directLevel = signalFlow1b : !,!,_,!,!,!,!,!,!,!;
+            timeIndex1 = signalFlow1b : !,!,!,_,!,!,!,!,!,!;
+            timeIndex2 = signalFlow1b : !,!,!,!,_,!,!,!,!,!;
+            triangle1 = signalFlow1b : !,!,!,!,!,_,!,!,!,!;
+            triangle2 = signalFlow1b : !,!,!,!,!,!,_,!,!,!;
+            triangle3 = signalFlow1b : !,!,!,!,!,!,!,_,!,!;
+            mic1 = signalFlow1b : !,!,!,!,!,!,!,!,_,!;
+            mic2 = signalFlow1b : !,!,!,!,!,!,!,!,!,_;
 
-process = noise(20) <: signalFlow1b( _@300, _@400, _@500, _@600, memWriteLev, cntrlMain);
+
+signalFlow2a(mic1, mic2, cntrlMic1, cntrlMic2, directLevel, triangle1, triangle2, diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlFeed, cntrlMain) = 
+sig1, sig2
+    with{
+        sigpre1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
+        sigpre2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
+        sig1 = sigpre1 * directLevel;
+        sig2 = sigpre2 * directLevel;
+        sig1SUM2 = (sigpre1 + sigpre2) * triangle1;
+
+        };
+        ///*
+        process = 
+            ( noise(20), 
+              noise(21), 
+              abs(noise(22))*0.350, 
+              abs(noise(23))*0.350,
+              abs(noise(24))*0.180, 
+              triangleWave(10),
+              triangleWave(0.2),
+              .4+abs(noise(25))*0.11,
+              .3+abs(noise(26))*0.21,
+              .3+abs(noise(27))*0.22,
+              .3+abs(noise(28))*0.23,
+              1-abs(noise(29))*0.10,
+              abs(noise(30))*0.1 )
+                :
+                signalFlow2a;
+                //*/
+                
+
+//process = _<: signal_flow_2a(mic1, mic2, cntrlMic1, cntrlMic2, directLevel, triangle1, triangle2, diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlFeed, cntrlMain);
+//process = noise(20) <: signalFlow1b( _@300, _@400, _@500, _@600, memWriteLev, cntrlMain);
