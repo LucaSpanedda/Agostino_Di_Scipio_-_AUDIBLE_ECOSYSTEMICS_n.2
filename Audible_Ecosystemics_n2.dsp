@@ -192,6 +192,13 @@ sig1,sig2,sig3,sig4,sig5,sig6,sig7
                 signalFlow2a;
                 //process = testSF2a;
         // OUTS
+        sig1 = signalFlow2a : _,!,!,!,!,!,!;
+        sig2 = signalFlow2a : !,_,!,!,!,!,!;
+        sig3 = signalFlow2a : !,!,_,!,!,!,!;
+        sig4 = signalFlow2a : !,!,!,_,!,!,!;
+        sig5 = signalFlow2a : !,!,!,!,_,!,!;
+        sig6 = signalFlow2a : !,!,!,!,!,_,!;
+        sig7 = signalFlow2a : !,!,!,!,!,!,_;
                 
 //-----------------------signal flow 2b-----------------------
 //Role of the signal flow block: signal processing of audio input from mic1 and mic2, and mixing of all audio signals
@@ -239,10 +246,16 @@ out1, out2, grainOut1, grainOut2
                 signalFlow2b;
                 //process = testSF2b;
         // OUTS
+        out1 = signalFlow2b : _,!,!,!;
+        out2 = signalFlow2b : !,_,!,!;
+        grainOut1 = signalFlow2b : !,!,_,!;
+        grainOut2 = signalFlow2b : !,!,!,_;
 
 //-----------------------signal flow 3-----------------------
 //Role of the signal flow block: dispatching of audio signals to output channels
-signalFlow3(out1, out2) = out1, out2, 
+signalFlow3(out1, out2) = 
+      out1, 
+      out2, 
     ( out2 : delayfb(var4/2/344, 0) ),
     ( out1 : delayfb(var4/2/344, 0) ),
     ( out1 : delayfb(var4/344, 0) ),
