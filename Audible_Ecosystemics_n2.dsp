@@ -38,13 +38,12 @@ mic3, mic4
         cntrlLev2 = cntrlMain : delayfb(var1/2,0);
         cntrlFeed = cntrlMain : mapwshape;
         };
-        /*
-        process = 
+        testSF1a = 
             ( noise(1), 
               noise(2) )
                 :
                 signalFlow1a;
-                */
+                process = testSF1a;
             // OUTS
             diffHL = signalFlow1a : _,!,!,!,!,!,!,!,!,!;
             memWriteDel1 = signalFlow1a : !,_,!,!,!,!,!,!,!,!;
@@ -84,8 +83,7 @@ mic1, mic2
         triangle2 = triangleWaveC;
         triangle3 = triangleWaveD;
         };
-        /*
-        process = 
+        testSF1b = 
             ( noise(10), 
               noise(11), 
               noise(12), 
@@ -94,7 +92,8 @@ mic1, mic2
               abs(noise(13))*0.92 )
                 :
                 signalFlow1b;
-                */
+                //process = testSF1b;
+            // OUTS
             cntrlMic1 = signalFlow1b : _,!,!,!,!,!,!,!,!,!;
             cntrlMic2 = signalFlow1b : !,_,!,!,!,!,!,!,!,!;
             directLevel = signalFlow1b : !,!,_,!,!,!,!,!,!,!;
@@ -175,8 +174,7 @@ sig1,sig2,sig3,sig4,sig5,sig6,sig7
         sig6 = Samplereads : !,!,!,_,!;
         sig7 = Samplereads : !,!,!,!,_;
         };
-        /*
-        process = 
+        testSF2a = 
             ( noise(20), 
               noise(21), 
               abs(noise(22))*0.350, 
@@ -192,7 +190,8 @@ sig1,sig2,sig3,sig4,sig5,sig6,sig7
               abs(noise(30))*0.1 )
                 :
                 signalFlow2a;
-                */
+                //process = testSF2a;
+        // OUTS
                 
 //-----------------------signal flow 2b-----------------------
 //Role of the signal flow block: signal processing of audio input from mic1 and mic2, and mixing of all audio signals
@@ -219,7 +218,7 @@ out1, out2, grainOut1, grainOut2
             sig2 + sig3 + sig7 +
             grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev);
         };
-        process = 
+        testSF2b = 
             ( (abs(noise(60)) -1) * .5, 
               (abs(noise(61)) -1) * .5,
               triangleWave( 1 / var1 ), 
@@ -238,6 +237,8 @@ out1, out2, grainOut1, grainOut2
               abs(noise(74)) )
                 :
                 signalFlow2b;
+                //process = testSF2b;
+        // OUTS
 
 //-----------------------signal flow 3-----------------------
 //Role of the signal flow block: dispatching of audio signals to output channels
@@ -246,7 +247,6 @@ signalFlow3(out1, out2) = out1, out2,
     ( out1 : delayfb(var4/2/344, 0) ),
     ( out1 : delayfb(var4/344, 0) ),
     ( out2 : delayfb(var4/344, 0) );
-    /*
-    process = 
+    testSF3 = 
         noise(40),noise(41)  : signalFlow3;
-        */
+        //process = testSF3
