@@ -38,13 +38,13 @@ mic3, mic4
         cntrlLev2 = cntrlMain : delayfb(var1/2,0);
         cntrlFeed = cntrlMain : mapwshape;
         };
-        ///*
+        /*
         process = 
             ( noise(1), 
               noise(2) )
                 :
                 signalFlow1a;
-                //*/
+                */
             // OUTS
             diffHL = signalFlow1a : _,!,!,!,!,!,!,!,!,!;
             memWriteDel1 = signalFlow1a : !,_,!,!,!,!,!,!,!,!;
@@ -198,5 +198,13 @@ sig1,sig2,sig3,sig4,sig5,sig6,sig7
 //-----------------------signal flow 2b-----------------------
 //Role of the signal flow block: signal processing of audio input from mic1 and mic2, and mixing of all audio signals
 
+
 //-----------------------signal flow 3-----------------------
 //Role of the signal flow block: dispatching of audio signals to output channels
+signalFlow3(x, y) = x, y, 
+    ( y : delayfb(var4/2/344, 0) ),
+    ( x : delayfb(var4/2/344, 0) ),
+    ( x : delayfb(var4/344, 0) ),
+    ( y : delayfb(var4/344, 0) );
+    process = 
+        noise(40),noise(41)  : signalFlow3;
