@@ -4,7 +4,7 @@ import("stdfaust.lib");
 //--------------------Four variables are to be initialized prior to performance:
 //VAR1
 //distance (in meters) between the two farthest removed loudspeakers on the left-right axis.
-var1 = 10;
+var1 = 12;
 //VAR2
 //rough estimate of the center frequency in the spectrum of the room’s background noise (spectral centroid):
 //to evaluate at rehearsal time, in a situation of "silence".
@@ -14,19 +14,22 @@ var2 = 10000;
 var3 = .6;
 //VAR4
 //distance (in meters) between the two farthest removed loudspeakers on the front-rear axis.
-var4 = 11;
+var4 = 12;
 
 
 //-------------------------------------------------------------------- DELAY ---
 delMax = 2^16;
 
-// FB delay line with a maximum delay of 1 second
-// Normalized output ( 1 - FB Gain )
+// FB delay line - w min and max
+delayfb(del,fb) = (+ : de.delay( ma.SR*(var1+var4), ba.sec2samp(del) ))~_ * (fb);
+// FB delay line with Normalized output ( 1 - FB Gain )
+/*
 delayfb(del,fb) = (+ : de.delay(ma.SR,ba.sec2samp(d)))~_ * (fb) : * (1-fb)
 with{
   d = min(0, del);
   dmax = d : ba.sec2samp : ma.np2;
 };
+*/
 
 //--------------------------------------------------------------- INTEGRATOR ---
 // returns the average absolute value over a specific time frame
@@ -359,7 +362,7 @@ granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
 
 // DEMO GUI //////////////////////////////////////////////////////////////
 // timeIndex1 - a signal between -1 and -0.5
-GtimeIndex = hslider("timeIndex1", -1, -1, -0.5, .001);
+GtimeIndex = hslider("timeIndex1", -1, -1, -0.5, .001); 
 // memWriteDel1 - a signal between 0 and 1
 GmemWriteDel = hslider("memWriteDel1", 0, 0, 1, .001);
 volume = hslider("volume", 0, 0, 10, .001);
