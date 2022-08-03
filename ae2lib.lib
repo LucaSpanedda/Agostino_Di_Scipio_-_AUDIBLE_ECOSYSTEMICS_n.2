@@ -8,20 +8,21 @@ var1 = 12;
 //VAR2
 //rough estimate of the center frequency in the spectrum of the room’s background noise (spectral centroid):
 //to evaluate at rehearsal time, in a situation of "silence".
-var2 = 10000;
+var2 = 10000; 
 //VAR3
 //subjective estimate of how the room revereberance, valued between 0 ("no reverb") and 1 (“very long reverb”).
 var3 = .6;
 //VAR4
 //distance (in meters) between the two farthest removed loudspeakers on the front-rear axis.
-var4 = 12;
-
-
-//-------------------------------------------------------------------- DELAY ---
+var4 = 14;
+// max values
+varMax = max(var1,var4);
 delMax = 2^16;
 
+//-------------------------------------------------------------------- DELAY ---
+
 // FB delay line - w min and max
-delayfb(del,fb) = (+ : de.delay( ma.SR*(var1+var4), ba.sec2samp(del) ))~_ * (fb);
+delayfb(del,fb) = (+ : de.delay( ma.SR*(varMax*2), ba.sec2samp(del) ))~_ * (fb);
 // FB delay line with Normalized output ( 1 - FB Gain )
 /*
 delayfb(del,fb) = (+ : de.delay(ma.SR,ba.sec2samp(d)))~_ * (fb) : * (1-fb)
