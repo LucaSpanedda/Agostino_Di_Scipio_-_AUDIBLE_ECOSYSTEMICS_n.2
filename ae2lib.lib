@@ -58,15 +58,13 @@ peakHolder(resetPeriod, x) = y
 localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
 
 //--------------------------------------------------------------- SAMPLEREAD ---
-sampleread(var1, ratio, memchunk, sig) =
-// delay frazionario                * crossfade
-  de.fdelay(delMax,d,sig)         *    ma.fmin(d/xfade,1) +
-  de.fdelay(delMax,d+bufsize,sig) * (1-ma.fmin(d/xfade,1))
-with {
-    bufsize = int(min(delMax, var1) * (memchunk) : si.smoo);
-    xfade = 128;
-	d = (1 - ratio : si.smoo) : (+ : +(bufsize) : fmod(_,bufsize)) ~ _;
-};
+sampler(bufferLengthSamples, memChunk, ratio, x) = 
+    it.frwtable(3, 192000*var1, .0, ba.period(bufferLengthSamples), x, rIdx)
+    with {
+        readingLength = si.smoo(memChunk) * bufferLengthSamples;
+        readingRate = ma.SR / readingLength;
+        rIdx = os.phasor(readingLength * si.smoo(ratio), readingRate);
+    };
 
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
