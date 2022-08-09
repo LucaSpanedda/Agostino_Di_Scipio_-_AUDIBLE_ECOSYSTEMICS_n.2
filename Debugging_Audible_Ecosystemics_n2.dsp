@@ -137,7 +137,7 @@ with{
     sig5 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(E);
     sig6 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(F);
     sig7 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(G);
-    };
+};
 
 //process = signalFlow2a;
     
