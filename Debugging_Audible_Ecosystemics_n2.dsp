@@ -42,7 +42,8 @@ cntrlMain
         cntrlLev2 = cntrlMain : delayfb(var1 / 2, 0) : \(x).(1.0 - x);
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
     };
-testSF1a = ( _*.1 <: _, _@1000 ) : signalFlow1a;
+testSF1a = 
+    ( _*.1 <: _, _@1000 ) : signalFlow1a;
 process = testSF1a;
 
 //-----------------------signal flow 1b-----------------------
@@ -80,17 +81,43 @@ testSF1b =
 
 //-----------------------signal flow 2a-----------------------
 //Role of the signal flow block: signal processing of audio input from mic1 and mic2, and mixing of all audio signals
-signalFlow2a(mic1, mic2, cntrlMic1, cntrlMic2, directLevel, triangle1, triangle2, diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlFeed, cntrlMain) =
-sig1,sig2,sig3,sig4,sig5,sig6,sig7
-    with{
-        sigpre1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
-        sigpre2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
-
-        Samplereads = sig3, sig4, sig5, sig6, sig7
-            with{
-                
-                sig1and2Sum = (sigpre1 + sigpre2); 
-
+signalFlow2a(mic1, mic2, cntrlMic1, cntrlMic2, directLevel, triangle1, triangle2, diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlFeed, cntrlMain) = 
+sig1, 
+sig2,
+sig3,
+sig4,
+sig5,
+sig6,
+sig7
+with{
+    signalFlow2aLoop = loop ~ _ : !,_,_,_,_,_,_,_
+        with{
+            loop(fb) = 
+            (
+            ( mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1) ),
+            ( mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2) ),
+            ( sampler(ma.SR*var1, memchunk1, ratio1, fb) : HP4(50) : delayfb( var1/2, 0) ), 
+            ( sampler(ma.SR*var1, memchunk2, ratio2, fb) : HP4(50) : delayfb( var1, 0) ), 
+            ( 
+                ( sampler(ma.SR*var1, memchunk3, ratio3, fb) : HP4(50) ) <: 
+                BPsvftpt(diffHL * 400, (var2 / 2) * memWriteDel2), 
+                BPsvftpt((1-diffHL) * 800, var2 * (1-memWriteDel1)
+                ), 
+                delayfb(var1/1.5, 0) * directLevel
+            ),
+            ( sampler(ma.SR*var1, memchunk4, ratio4, fb) : HP4(50) : delayfb(var1 / 3, 0) ),
+            ( sampler(ma.SR*var1, memchunk5, ratio5, fb) : HP4(50) : delayfb(var1 / 2.5, 0) )
+            )   
+            : 
+            _,_,( (_,_,_,_ :> +) * (cntrlFeed * memWriteLev) ), _,_,_ 
+            : \(micSect1,micSect2,Sumreads123,sig7,sig5,sig6).
+            ( ( (micSect1,micSect2,Sumreads123) :> _ )* triangle1, 
+            micSect1 * directLevel, micSect2 * directLevel, 
+            ( (Sumreads123 * memWriteLev : delayfb(.05 * cntrlMain, 0) ) 
+            * triangle2 ) * directLevel, 
+            ( (Sumreads123 * memWriteLev) * (1-triangle2) ) * directLevel, 
+            sig5,sig6,sig7)
+                with{
                     ratio1 = (var2+(diffHL*1000))/261;
                     memchunk1 = (1-memWriteDel2);
                     ratio2 = (var2+(diffHL*1000))/261;
@@ -101,78 +128,19 @@ sig1,sig2,sig3,sig4,sig5,sig6,sig7
                     memchunk4 = (1-memWriteDel2);
                     ratio5 = (var2+(diffHL*1000))/261;
                     memchunk5 = (1-memWriteDel2);
-
-                sampleread1(x) = x : sampleread(var1, ratio1, memchunk1) 
-                : HP4(50) : delayfb( (var1 / 2), 0);
-
-                sampleread2(x) = x : sampleread(var1, ratio2, memchunk2) 
-                : HP4(50) : delayfb( (var1), 0);
-
-                sampleread3(x) = x : sampleread(var1, ratio3, memchunk3) : 
-                HP4(50);
-                    sampleread3A(y) = y : sampleread3 
-                    : BPsvftpt(diffHL * 400, (var2 / 2) * memWriteDel2);
-                    sampleread3B(y) = y : sampleread3 
-                    : BPsvftpt( (1-diffHL) * 800, var2 * (1-memWriteDel1) );
-                
-                sampleread4(x) = x : sampleread(var1, ratio4, memchunk4) : 
-                HP4(50) : delayfb(var1 / 3, 0);
-
-                sampleread5(x) = x : sampleread(var1, ratio5, memchunk5) : 
-                HP4(50) : delayfb(var1 / 2.5, 0);
-
-                    ReadsLoop(x) = 
-                    ( ( x : sampleread1 ), ( x : sampleread2 ),
-                    ( x : sampleread3A ), ( x : sampleread3B ) 
-                    :> + * (cntrlFeed * memWriteLev) ), 
-                    ( x : sampleread3 ), ( x : sampleread4), ( x : sampleread5);
-
-                    Mainloop = ( _ + sig1and2Sum : _* triangle1 : ReadsLoop) ~ _;
-
-                Loop1 = (Mainloop : _,!,!,!);
-                sig3pre = Loop1 * memWriteLev;
-                sig3 = sig3pre : delayfb(.05 * cntrlMain, 0) * triangle2 * directLevel;
-                sig4 = sig3pre * (1-triangle2) * directLevel;
-                Loop2 = (Mainloop : !,_,!,!);
-                sig7 = Loop2 :  delayfb(var1 / 1.5, 0) * directLevel;
-                sig5 = (Mainloop : !,!,_,!);
-                sig6 = (Mainloop : !,!,!,_);
                 };
-        
-        sig1 = sigpre1 * directLevel;
-        sig2 = sigpre2 * directLevel;
-        sig3 = Samplereads : _,!,!,!,!;
-        sig4 = Samplereads : !,_,!,!,!;
-        sig5 = Samplereads : !,!,_,!,!;
-        sig6 = Samplereads : !,!,!,_,!;
-        sig7 = Samplereads : !,!,!,!,_;
         };
-        testSF2a = 
-            ( noise(20), 
-              noise(21), 
-              abs(noise(22))*0.350, 
-              abs(noise(23))*0.350,
-              abs(noise(24))*0.180, 
-              triangleWave(10),
-              triangleWave(0.2),
-              .4+abs(noise(25))*0.11,
-              .3+abs(noise(26))*0.21,
-              .3+abs(noise(27))*0.22,
-              .3+abs(noise(28))*0.23,
-              1-abs(noise(29))*0.10,
-              abs(noise(30))*0.1 )
-                :
-                signalFlow2a;
-                //process = testSF2a;
-        // OUTS
-        sig1 = signalFlow2a : _,!,!,!,!,!,!;
-        sig2 = signalFlow2a : !,_,!,!,!,!,!;
-        sig3 = signalFlow2a : !,!,_,!,!,!,!;
-        sig4 = signalFlow2a : !,!,!,_,!,!,!;
-        sig5 = signalFlow2a : !,!,!,!,_,!,!;
-        sig6 = signalFlow2a : !,!,!,!,!,_,!;
-        sig7 = signalFlow2a : !,!,!,!,!,!,_;
-                
+    sig1 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(A);
+    sig2 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(B);
+    sig3 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(C);
+    sig4 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(D);
+    sig5 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(E);
+    sig6 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(F);
+    sig7 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(G);
+    };
+
+//process = signalFlow2a;
+    
 //-----------------------signal flow 2b-----------------------
 //Role of the signal flow block: signal processing of audio input from mic1 and mic2, and mixing of all audio signals
 signalFlow2b(timeIndex1, timeIndex2, triangle3, graIN, sig1, sig2, sig3, sig4, sig5, sig6, sig7, 
@@ -233,6 +201,6 @@ signalFlow3(out1, out2) =
     ( out1 : delayfb(var4/2/344, 0) ),
     ( out1 : delayfb(var4/344, 0) ),
     ( out2 : delayfb(var4/344, 0) );
-    testSF3 = 
-        noise(40),noise(41)  : signalFlow3;
-        //process = testSF3
+testSF3 = 
+    noise(40),noise(41)  : signalFlow3;
+//process = testSF3
