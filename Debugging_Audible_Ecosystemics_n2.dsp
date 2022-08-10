@@ -1,6 +1,7 @@
 declare name "Agostino Di Scipio - AUDIBLE ECOSYSTEMICS n.2";
 import("ae2lib.lib");
 
+
 //-----------------------signal flow 1a-----------------------
 //Role of the signal flow block: generation of control signals based on mic3 and mic4 input
 signalFlow1a(mic3, mic4) = 
@@ -43,8 +44,9 @@ cntrlMain
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
     };
 testSF1a = 
-    ( _*.1 <: _, _@1000 ) : signalFlow1a;
-process = testSF1a;
+    ( _*.1 <: _, _@4000 ) 
+    : signalFlow1a;
+//process = testSF1a;
 
 //-----------------------signal flow 1b-----------------------
 //Role of the signal flow block: generation of control signals based on mic1 and mic2 input, plus internal signal generators
@@ -75,8 +77,8 @@ triangle3
     };
 testSF1b = 
     (_*.1 <: _, _@1000, _@2000, _@3000, 
-    abs(os.osc(.12))*.9997, abs(os.osc(.14))*.0003) : 
-    signalFlow1b;
+    abs(os.osc(.12))*.9997, abs(os.osc(.14))*.0003) 
+    : signalFlow1b;
 //process = testSF1b;
 
 //-----------------------signal flow 2a-----------------------
@@ -138,59 +140,54 @@ with{
     sig6 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(F);
     sig7 = signalFlow2aLoop : \(A,B,C,D,E,F,G).(G);
 };
-
-//process = signalFlow2a;
+testSF2a = 
+    ( (_*100 <: _, _@4000), 
+    abs(noise(10))*.05, abs(noise(11))*.05, abs(noise(12))*.97,
+    triangleWave( 1 / (var1 * 6) )*.05, triangleWave( var1 * (1 - .1) ),
+    abs(noise(13))*.42, abs(noise(14))*.99, abs(noise(15))*.99, abs(noise(16))*.99,
+    1, abs(noise(13))*.0001 )
+    : signalFlow2a : \(A,B,C,D,E,F,G).(A,B);//(C+E, D+F+G);
+process = testSF2a;
     
 //-----------------------signal flow 2b-----------------------
 //Role of the signal flow block: signal processing of audio input from mic1 and mic2, and mixing of all audio signals
 signalFlow2b(timeIndex1, timeIndex2, triangle3, graIN, sig1, sig2, sig3, sig4, sig5, sig6, sig7, 
 memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2) =
-out1, out2, grainOut1, grainOut2
+out1, 
+out2, 
+grainOut1, 
+grainOut2
     with{
         grainOut1 = granular_sampling(1,var1,timeIndex1,memWriteDel1,cntrlLev1,21, graIN);
         grainOut2 = granular_sampling(1,var1,timeIndex2,memWriteDel2,cntrlLev2,20, graIN);
-
         out1 = 
-            ( sig5 : delayfb(.04, 0) * (1 - triangle3) ) + 
-            ( sig5 * triangle3 ) +
-            ( sig6 : delayfb(.036, 0) * (1 - triangle3) )  +
-            ( sig6 : delayfb(.036, 0) * triangle3 ) +
-            sig1 + sig2 + sig4 +
-            grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev; 
-
+        (
+            ( sig5 : delayfb(.04, 0) * (1 - triangle3) ),
+            ( sig5 * triangle3 ),
+            ( sig6 : delayfb(.036, 0) * (1 - triangle3) ),
+            ( sig6 : delayfb(.036, 0) * triangle3 ),
+            sig1, sig2, sig4,
+            grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev 
+        ) :> +; 
         out2 = 
-            ( sig5 * (1 - triangle3) ) + 
-            ( sig5 : delayfb(.040, 0) * triangle3 ) +
-            ( sig6 * (1 - triangle3) ) +
-            ( sig6 * triangle3 ) + 
-            sig2 + sig3 + sig7 +
-            grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev);
-        };
-        testSF2b = 
-            ( (abs(noise(60)) -1) * .5, 
-              (abs(noise(61)) -1) * .5,
-              triangleWave( 1 / var1 ), 
-              noise(62) * .1,
-              noise(63) * .1, 
-              noise(64) * .1,
-              noise(65) * .1,
-              noise(66) * .1,
-              noise(67) * .1,
-              noise(68) * .1,
-              noise(69) * .1,
-              abs(noise(70)),
-              abs(noise(71)),
-              abs(noise(72)),
-              abs(noise(73)),
-              abs(noise(74)) )
-                :
-                signalFlow2b;
-                //process = testSF2b;
-        // OUTS
-        out1 = signalFlow2b : _,!,!,!;
-        out2 = signalFlow2b : !,_,!,!;
-        grainOut1 = signalFlow2b : !,!,_,!;
-        grainOut2 = signalFlow2b : !,!,!,_;
+        (
+            ( sig5 * (1 - triangle3) ),
+            ( sig5 : delayfb(.040, 0) * triangle3 ),
+            ( sig6 * (1 - triangle3) ),
+            ( sig6 * triangle3 ),
+            sig2 + sig3 + sig7,
+            grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev)
+        ) :> +;
+    };
+testSF2b = 
+    ( (abs(noise(60)) -1) * .5, (abs(noise(61)) -1) * .5,
+    triangleWave( 1 / var1 ), 
+    noise(62) * .1, noise(63) * .1, noise(64) * .1, noise(65) * .1,
+    noise(66) * .1, noise(67) * .1, noise(68) * .1, noise(69) * .1,
+    abs(noise(70)), abs(noise(71)), abs(noise(72)),
+    abs(noise(73)), abs(noise(74)) )
+    : signalFlow2b;
+//process = testSF2b;
 
 //-----------------------signal flow 3-----------------------
 //Role of the signal flow block: dispatching of audio signals to output channels
@@ -202,5 +199,6 @@ signalFlow3(out1, out2) =
     ( out1 : delayfb(var4/344, 0) ),
     ( out2 : delayfb(var4/344, 0) );
 testSF3 = 
-    noise(40),noise(41)  : signalFlow3;
+    noise(40),noise(41)  
+    : signalFlow3;
 //process = testSF3
