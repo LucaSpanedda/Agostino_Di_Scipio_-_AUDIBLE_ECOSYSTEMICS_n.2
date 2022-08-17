@@ -40,8 +40,8 @@ cntrlMain
         cntrlMain = 
             micSUM * SenstoExt : integrator(.01) : 
                 delayfb(.01,.995) : LP4(25);
-        cntrlLev1 = cntrlMain : delayfb(var1 / 3, 0) : \(x).(1.0 - x);
-        cntrlLev2 = cntrlMain : delayfb(var1 / 2, 0) : \(x).(1.0 - x);
+        cntrlLev1 = cntrlMain : delayfb(var1 / 3, 0);
+        cntrlLev2 = cntrlMain : delayfb(var1 / 2, 0);
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
     };
 testSF1a = 
