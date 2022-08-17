@@ -31,10 +31,10 @@ diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed
         cntrlMain = 
             (mic3 + mic4) * SenstoExt : integrator(.01) : 
                 delayfb(.01,.995) : LP4(25);
-        cntrlLev1 = cntrlMain : delayfb(var1 / 3, 0) : \(x).(1.0 - x);
-        cntrlLev2 = cntrlMain : delayfb(var1 / 2, 0) : \(x).(1.0 - x);
+        cntrlLev1 = cntrlMain : delayfb(var1 / 3, 0);
+        cntrlLev2 = cntrlMain : delayfb(var1 / 2, 0);
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
 
     };
     
-process = audibleecosystemics2;
+process = _ <: _@0000, _@1000, _@2000, _@3000 : audibleecosystemics2;
