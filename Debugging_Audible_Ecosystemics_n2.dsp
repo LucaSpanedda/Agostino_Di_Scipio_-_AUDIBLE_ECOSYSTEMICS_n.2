@@ -5,7 +5,7 @@ import("ae2lib.lib");
 audibleecosystemics2(mic1, mic2, mic3, mic4) =
 //diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
 //cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
-SRLoopSect  
+sig5, sig6
     with{
         // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
@@ -55,16 +55,11 @@ SRLoopSect
         triangle3 = triangleWave( 1 / var1 );
 
         // ------------------------------------------------------ Signal Flow 2a
-        ratio1 = (var2+(diffHL*1000))/261;
-        memchunk1 = (1-memWriteDel2);
-        ratio2 = (var2+(diffHL*1000))/261;
-        memchunk2 = (1-memWriteDel2);
-        ratio3 = (var2+(diffHL*1000))/261;
-        memchunk3 = (1-memWriteDel2);
-        ratio4 = (var2+(diffHL*1000))/261;
-        memchunk4 = (1-memWriteDel2);
-        ratio5 = (var2+(diffHL*1000))/261;
-        memchunk5 = (1-memWriteDel2);
+        ratio1 = (var2+(diffHL*1000))/261; memchunk1 = (1-memWriteDel2);
+        ratio2 = (var2+(diffHL*1000))/261; memchunk2 = (1-memWriteDel2);
+        ratio3 = (var2+(diffHL*1000))/261; memchunk3 = (1-memWriteDel2);
+        ratio4 = (var2+(diffHL*1000))/261; memchunk4 = (1-memWriteDel2);
+        ratio5 = (var2+(diffHL*1000))/261; memchunk5 = (1-memWriteDel2);
 
         micIN1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
         micIN2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
@@ -74,28 +69,37 @@ SRLoopSect
             HP4(50) : delayfb(var1, 0);
         SRSect3(x) = x : sampler(ma.SR*var1, memchunk3, ratio3) : 
             HP4(50);
-            SRSect3bpass1(x) = x : SRSect3 : 
-                BPsvftpt(diffHL * 400, ma.EPSILON + (var2 / 2) * memWriteDel2);
-            SRSect3bpass2(x) = x : SRSect3 : 
-                BPsvftpt((1-diffHL) * 800, ma.EPSILON + var2 * (1-memWriteDel1));
-        SRSect4(x) = x : sampler(ma.SR*var1, memchunk4, ratio4) : 
-            HP4(50) : delayfb(var1 / 3, 0);
-        SRSect5(x) = x : sampler(ma.SR*var1, memchunk5, ratio5) : 
-            HP4(50) : delayfb(var1 / 2.5, 0);
+            SRSectBP1(x) = x : SRSect3 : 
+                BPsvftpt(diffHL * 400, ma.EPSILON+(var2 / 2) * memWriteDel2);
+            SRSectBP2(x) = x : SRSect3 : 
+                BPsvftpt((1-diffHL) * 800, ma.EPSILON+var2 * (1-memWriteDel1));
+        SRSect4(x) = x : sampler(ma.SR*var1, memchunk4, ratio4);
+        SRSect5(x) = x : sampler(ma.SR*var1, memchunk5, ratio5);
 
-        SRLoopSect = loop ~ _
-        with{
-            loop(fb) = 
+        SRLoopSect = 
+        \(fb).(
             (
-                (SRSect1(fb), SRSect2(fb), SRSect3bpass1(fb), SRSect3bpass2(fb) :> +)
-                    * (cntrlFeed * memWriteLev) + (micIN1 + micIN2)
-                            ) * triangle1, 
-                                    SRSect4(fb), SRSect5(fb);
-        };
+                (SRSect1(fb), SRSect2(fb), SRSectBP1(fb), SRSectBP2(fb) :> +)
+                    * (cntrlFeed * memWriteLev) 
+            ) <: (_ + (micIN1 + micIN2) : _ * triangle1), _,
+            SRSect4(fb), SRSect5(fb), SRSect3(fb)
+        ) ~ _ ;
+
         sig1 = micIN1 * directLevel;
         sig2 = micIN2 * directLevel;
+        sampleWriteOut = SRLoopSect : \(A,B,C,D,E).(A);
+        sig3 = SRLoopSect : \(A,B,C,D,E).(B) : 
+            _ * memWriteLev : delayfb(.05 * cntrlMain, 0) 
+                * triangle2 * directLevel;
+        sig4 = SRLoopSect : \(A,B,C,D,E).(B) : 
+            _ * memWriteLev * (1-triangle2) * directLevel;
+        sig5 = SRLoopSect : \(A,B,C,D,E).(C) : 
+            HP4(50) : delayfb(var1 / 3, 0);
+        sig6 = SRLoopSect : \(A,B,C,D,E).(D) : 
+            HP4(50) : delayfb(var1 / 2.5, 0);
+        sig7 = SRLoopSect : \(A,B,C,D,E).(E) : 
+            delayfb(var1 / 1.5, 0) * directLevel;
     };
-    
 process = _*.5 <: 
     _*(noise(1):LP1(1000)), 
         _*(noise(2):LP1(1000)), 
