@@ -5,7 +5,8 @@ import("ae2lib.lib");
 audibleecosystemics2(mic1, mic2, mic3, mic4) =
 //diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
 //cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
-sig5, sig6
+//sig1, sig2, sig3, sig4, sig5, sig6, sig7
+out1, out2
     with{
         // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
@@ -75,19 +76,18 @@ sig5, sig6
                 BPsvftpt((1-diffHL) * 800, ma.EPSILON+var2 * (1-memWriteDel1));
         SRSect4(x) = x : sampler(ma.SR*var1, memchunk4, ratio4);
         SRSect5(x) = x : sampler(ma.SR*var1, memchunk5, ratio5);
-
         SRLoopSect = 
-        \(fb).(
+        \(fb).
+        (
             (
                 (SRSect1(fb), SRSect2(fb), SRSectBP1(fb), SRSectBP2(fb) :> +)
                     * (cntrlFeed * memWriteLev) 
             ) <: (_ + (micIN1 + micIN2) : _ * triangle1), _,
             SRSect4(fb), SRSect5(fb), SRSect3(fb)
         ) ~ _ ;
-
         sig1 = micIN1 * directLevel;
         sig2 = micIN2 * directLevel;
-        sampleWriteOut = SRLoopSect : \(A,B,C,D,E).(A);
+        sampWOut = SRLoopSect : \(A,B,C,D,E).(A);
         sig3 = SRLoopSect : \(A,B,C,D,E).(B) : 
             _ * memWriteLev : delayfb(.05 * cntrlMain, 0) 
                 * triangle2 * directLevel;
@@ -99,6 +99,32 @@ sig5, sig6
             HP4(50) : delayfb(var1 / 2.5, 0);
         sig7 = SRLoopSect : \(A,B,C,D,E).(E) : 
             delayfb(var1 / 1.5, 0) * directLevel;
+        
+        // ------------------------------------------------------ Signal Flow 2b
+        grainOut1 = granular_sampling
+            (1,var1,timeIndex1,memWriteDel1,cntrlLev1,21,sampWOut);
+        grainOut2 = granular_sampling
+            (1,var1,timeIndex2,memWriteDel2,cntrlLev2,20,sampWOut);
+        out1 = 
+            (
+                ( sig5 : delayfb(.04, 0) * (1 - triangle3) ),
+                    ( sig5 * triangle3 ),
+                        ( sig6 : delayfb(.036, 0) * (1 - triangle3) ),
+                            ( sig6 : delayfb(.036, 0) * triangle3 ),
+                                sig1, sig2, sig4,
+                                    grainOut1 * (1 - memWriteLev) + 
+                                        grainOut2 * memWriteLev 
+                                            ) :> +; 
+        out2 = 
+            (
+                ( sig5 * (1 - triangle3) ),
+                    ( sig5 : delayfb(.040, 0) * triangle3 ),
+                        ( sig6 * (1 - triangle3) ),
+                            ( sig6 * triangle3 ),
+                                sig2 + sig3 + sig7,
+                                    grainOut1 * memWriteLev + 
+                                        grainOut2 * (1 - memWriteLev)
+                                            ) :> +;
     };
 process = _*.5 <: 
     _*(noise(1):LP1(1000)), 
