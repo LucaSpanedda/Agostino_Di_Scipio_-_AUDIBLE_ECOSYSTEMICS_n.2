@@ -1,152 +1,25 @@
 declare name "Agostino Di Scipio - AUDIBLE ECOSYSTEMICS n.2 Library";
 import("stdfaust.lib");
 
-//--------------------Four variables are to be initialized prior to performance:
+
+//------------------------------------------------------------------------------
+//-------------------------------------------------------------------- CONSTANTS
 //VAR1
 //distance (in meters) between the two farthest removed loudspeakers on the left-right axis.
-var1 = 12;
+var1 = 4;
 //VAR2
 //rough estimate of the center frequency in the spectrum of the room’s background noise (spectral centroid):
 //to evaluate at rehearsal time, in a situation of "silence".
 var2 = 10000; 
 //VAR3
 //subjective estimate of how the room revereberance, valued between 0 ("no reverb") and 1 (“very long reverb”).
-var3 = .6;
+var3 = .1;
 //VAR4
 //distance (in meters) between the two farthest removed loudspeakers on the front-rear axis.
-var4 = 14;
-// max values
+var4 = 4;
+// max var
 varMax = max(var1,var4);
-delMax = 2^16;
 
-//-------------------------------------------------------------------- DELAY ---
-// FB delay line - w min and max
-delayfb(del,fb) = (+ : de.delay( ma.SR*(varMax*2), ba.sec2samp(del) ))~_ * (fb);
-// FB delay line with Normalized output ( 1 - FB Gain )
-/*
-delayfb(del,fb) = (+ : de.delay(ma.SR,ba.sec2samp(d)))~_ * (fb) : * (1-fb)
-with{
-  d = min(0, del);
-  dmax = d : ba.sec2samp : ma.np2;
-};
-*/
-
-//--------------------------------------------------------------- INTEGRATOR ---
-// returns the average absolute value over a specific time frame
-// (one may use RMS measures, instead, or other amplitude-following methods);
-// output range is [0, 1]
-movingAverage(seconds, x) = x - (x @ N) : fi.pole(1.0) / N
-    with {
-        N = seconds * ma.SR;
-    };
-
-RMSRectangular(seconds, x) = sqrt(max(0, movingAverage(seconds, x * x)));
-
-integrator(seconds, x) = RMSRectangular(seconds, x);
-//----------------------------------------------------------------- LOCALMAX ---
-// returns the maximum signal amplitude (absolute value) in a given time frame;
-// frame duration is dynamically adjusted: the next frame duration is set at the
-// end of the previous frame
-peakHolder(resetPeriod, x) = y
-    letrec {
-        'y = ba.if(reset, abs(x), max(y, abs(x)));
-    }
-        with {
-            reset = os.phasor(1, 1.0 / resetPeriod) : \(x).(x < x');
-        };
-
-localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
-
-//--------------------------------------------------------------- SAMPLEREAD ---
-sampler(bufferLengthSamples, memChunk, ratio, x) = 
-    it.frwtable(3, 192000*var1, .0, ba.period(bufferLengthSamples), x, rIdx)
-    with {
-        readingLength = si.smoo(memChunk) * bufferLengthSamples;
-        readingRate = ma.SR / readingLength;
-        rIdx = os.phasor(readingLength * si.smoo(ratio), readingRate);
-    };
-
-//----------------------------------------------------------------- TRIANGLE ---
-triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
-triangleWave(f) = triangularFunc(os.phasor(1,f));
-// TEST
-// process = triangleWave(10);
-
-//------------------------------------------------------------------ FILTERS ---
-// TPT version of the One Pole and SVF Filter by Vadim Zavalishin
-// reference : (by Will Pirkle)
-// http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
-// OnePoleTPT filter function
-onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
-    with {
-        g = tan(cf * ma.PI * ma.T);
-        G = g / (1.0 + g);
-        loop(s) = u , lp , hp , ap
-            with {
-                v = (x - s) * G;
-                u = v + lp;
-                lp = v + s;
-                hp = x - lp;
-                ap = lp - hp;
-            };
-    };
-LPTPT(cf, x) = onePoleTPT(cf, x) : (_ , ! , !);
-HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
-// SVFTPT filter function
-SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
-    with{
-        g = tan(CF * ma.PI / ma.SR);
-        R = 1.0 / (2.0 * Q);
-        G1 = 1.0 / (1.0 + 2.0 * R * g + g * g);
-        G2 = 2.0 * R + g;
-
-        circuit(s1, s2) = u1 , u2 , lp , hp , bp, notch, apf, ubp, peak, bshelf
-            with{
-                hp = (x - s1 * G2 - s2) * G1;
-                v1 = hp * g;
-                bp = s1 + v1;
-                v2 = bp * g;
-                lp = s2 + v2;
-                u1 = v1 + bp;
-                u2 = v2 + lp;
-                notch = x - ((2*R)*bp);
-                apf = x - ((4*R)*bp);
-                ubp = ((2*R)*bp);
-                peak = lp -hp;
-                bshelf = x + (((2*K)*R)*bp);
-            };
-    // choose the output from the SVF Filter (ex. bshelf)
-    circuitout = circuit ~ si.bus(2);
-    };
-    
-// Outs = (lp , hp , bp, notch, apf, ubp, peak, bshelf)
-// SVFTPT(K, Q, CF, x) = (Filter-K, Filter-Q, Frequency Cut)
-
-// NOTES ON DI SCIPIO'S SCORE:
-// 1st order -> 1st order TPT
-// 2nd and 3rd order -> second order TPT (SVF)
-// 4th and 5th order -> 4th order TPT (two cascaded SVF)
-
-// Filters Bank
-LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
-HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x) : !,!,_,!,!,!,!,!
-    with{
-        Q = CF / BW;
-        };
-
-// Order Aproximations - Outs
-LP1(CF, x) = x : LPTPT(CF);
-HP1(CF, x) = x : HPTPT(CF);
-LP2(CF, x) = x : LPsvf(CF);
-HP2(CF, x) = x : HPsvf(CF);
-LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
-HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
-// TEST
-// process = no.noise : LP4(((os.osc(2)+1)/2)*400);
-
-
-//-------------------------------------------------------- PRIMES --------------
 // Prime Numbers List
 primes =
 (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73,
@@ -255,9 +128,148 @@ primeNumbers(index) = ba.take(index , list)
     list = primes;
 };
 
+
+//------------------------------------------------------------------------------
+//--------------------------------------------------------------- SAMPLEREAD ---
+sampler(bufferLenghtSeconds, memChunk, ratio, x) = 
+    it.frwtable(3, 192000 * (var1), .0, ba.period(bufferLenghtSeconds * ma.SR), x, rIdx)
+    with {
+        readingLength = si.smoo(memChunk) * bufferLenghtSeconds;
+        readingRate = ma.SR / readingLength;
+        rIdx = os.phasor(readingLength * si.smoo(ratio), readingRate);
+    };
+
+//------------------------------------------------------------------------------
+//-------------------------------------------------------------------- DELAY ---
+// FB delay line - w min and max
+delayfb(del,fb) = (+ : de.delay( ba.sec2samp(del), ba.sec2samp(del) ))~ _ * (fb);
+// FB delay line with Normalized output ( 1 - FB Gain )
+/*
+delayfb(del,fb) = (+ : de.delay(ma.SR,ba.sec2samp(d)))~_ * (fb) : * (1-fb)
+with{
+  d = min(0, del);
+  dmax = d : ba.sec2samp : ma.np2;
+};
+*/
+
+//------------------------------------------------------------------------------
+//--------------------------------------------------------------- INTEGRATOR ---
+// returns the average absolute value over a specific time frame
+// (one may use RMS measures, instead, or other amplitude-following methods);
+// output range is [0, 1]
+movingAverage(seconds, x) = x - (x @ N) : fi.pole(1.0) / N
+    with {
+        N = seconds * ma.SR;
+    };
+
+RMSRectangular(seconds, x) = sqrt(max(0, movingAverage(seconds, x * x)));
+
+integrator(seconds, x) = RMSRectangular(seconds, x);
+
+//------------------------------------------------------------------------------
+//----------------------------------------------------------------- LOCALMAX ---
+// returns the maximum signal amplitude (absolute value) in a given time frame;
+// frame duration is dynamically adjusted: the next frame duration is set at the
+// end of the previous frame
+peakHolder(resetPeriod, x) = y
+    letrec {
+        'y = ba.if(reset, abs(x), max(y, abs(x)));
+    }
+        with {
+            reset = os.phasor(1, 1.0 / resetPeriod) : \(x).(x < x');
+        };
+
+localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
+
+//------------------------------------------------------------------------------
+//----------------------------------------------------------------- TRIANGLE ---
+triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
+triangleWave(f) = triangularFunc(os.phasor(1,f));
+// TEST
+// process = triangleWave(10);
+
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------ FILTERS ---
+// TPT version of the One Pole and SVF Filter by Vadim Zavalishin
+// reference : (by Will Pirkle)
+// http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
+// OnePoleTPT filter function
+onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
+    with {
+        g = tan(cf * ma.PI * ma.T);
+        G = g / (1.0 + g);
+        loop(s) = u , lp , hp , ap
+            with {
+                v = (x - s) * G;
+                u = v + lp;
+                lp = v + s;
+                hp = x - lp;
+                ap = lp - hp;
+            };
+    };
+LPTPT(cf, x) = onePoleTPT(cf, x) : (_ , ! , !);
+HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
+// SVFTPT filter function
+SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
+    with{
+        g = tan(CF * ma.PI / ma.SR);
+        R = 1.0 / (2.0 * Q);
+        G1 = 1.0 / (1.0 + 2.0 * R * g + g * g);
+        G2 = 2.0 * R + g;
+
+        circuit(s1, s2) = u1 , u2 , lp , hp , bp, notch, apf, ubp, peak, bshelf
+            with{
+                hp = (x - s1 * G2 - s2) * G1;
+                v1 = hp * g;
+                bp = s1 + v1;
+                v2 = bp * g;
+                lp = s2 + v2;
+                u1 = v1 + bp;
+                u2 = v2 + lp;
+                notch = x - ((2*R)*bp);
+                apf = x - ((4*R)*bp);
+                ubp = ((2*R)*bp);
+                peak = lp -hp;
+                bshelf = x + (((2*K)*R)*bp);
+            };
+    // choose the output from the SVF Filter (ex. bshelf)
+    circuitout = circuit ~ si.bus(2);
+    };
+    
+// Outs = (lp , hp , bp, notch, apf, ubp, peak, bshelf)
+// SVFTPT(K, Q, CF, x) = (Filter-K, Filter-Q, Frequency Cut)
+
+// NOTES ON DI SCIPIO'S SCORE:
+// 1st order -> 1st order TPT
+// 2nd and 3rd order -> second order TPT (SVF)
+// 4th and 5th order -> 4th order TPT (two cascaded SVF)
+
+// Filters Bank
+LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
+HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x) : !,!,_,!,!,!,!,!
+    with{
+        Q = CF / BW;
+        };
+
+// Order Aproximations - Outs
+LP1(CF, x) = x : LPTPT(CF);
+HP1(CF, x) = x : HPTPT(CF);
+LP2(CF, x) = x : LPsvf(CF);
+HP2(CF, x) = x : HPsvf(CF);
+LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
+HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
+// TEST
+// process = no.noise : LP4(((os.osc(2)+1)/2)*400);
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
 noise(seed) = (+(primeNumbers(seed + 1)) ~ *(1103515245)) / 2147483647;
 
+
+//------------------------------------------------------------------------------
 //-------------------------------------------------------- GRANULAR SAMPLING ---
 /*
 read sample sequences off subsequent buffer memory chunks, and envelopes the
@@ -376,8 +388,7 @@ grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
 
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
-
-
+/*
 // DEMO GUI //////////////////////////////////////////////////////////////
 // timeIndex1 - a signal between -1 and -0.5
 GtimeIndex = hslider("timeIndex1", -1, -1, -0.5, .001); 
@@ -392,3 +403,4 @@ GnVoices = 2;
 GdivDur = 21;
 //////////////////////////////////////////////////////////////////////////
 //process = os.osc(1000) <: granular_sampling(GnVoices,Gvar1,GtimeIndex,GmemWriteDel,GcntrlLev,GdivDur);
+*/

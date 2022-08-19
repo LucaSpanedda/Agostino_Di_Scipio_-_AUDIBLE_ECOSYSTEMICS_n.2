@@ -6,7 +6,9 @@ audibleecosystemics2(mic1, mic2, mic3, mic4) =
 //diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
 //cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
 //sig1, sig2, sig3, sig4, sig5, sig6, sig7
-out1, out2
+//out1, out2
+//sf3
+sig5, sig6
     with{
         // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
@@ -56,6 +58,7 @@ out1, out2
         triangle3 = triangleWave( 1 / var1 );
 
         // ------------------------------------------------------ Signal Flow 2a
+        // for Sample Reads:
         ratio1 = (var2+(diffHL*1000))/261; memchunk1 = (1-memWriteDel2);
         ratio2 = (var2+(diffHL*1000))/261; memchunk2 = (1-memWriteDel2);
         ratio3 = (var2+(diffHL*1000))/261; memchunk3 = (1-memWriteDel2);
@@ -64,18 +67,18 @@ out1, out2
 
         micIN1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
         micIN2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
-        SRSect1(x) = x : sampler(ma.SR*var1, memchunk1, ratio1) : 
+        SRSect1(x) = x : sampler(var1, memchunk1, ratio1) : 
             HP4(50) : delayfb(var1/2, 0);
-        SRSect2(x) = x : sampler(ma.SR*var1, memchunk2, ratio2) : 
+        SRSect2(x) = x : sampler(var1, memchunk2, ratio2) : 
             HP4(50) : delayfb(var1, 0);
-        SRSect3(x) = x : sampler(ma.SR*var1, memchunk3, ratio3) : 
+        SRSect3(x) = x : sampler(var1, memchunk3, ratio3) : 
             HP4(50);
             SRSectBP1(x) = x : SRSect3 : 
                 BPsvftpt(diffHL * 400, ma.EPSILON+(var2 / 2) * memWriteDel2);
             SRSectBP2(x) = x : SRSect3 : 
                 BPsvftpt((1-diffHL) * 800, ma.EPSILON+var2 * (1-memWriteDel1));
-        SRSect4(x) = x : sampler(ma.SR*var1, memchunk4, ratio4);
-        SRSect5(x) = x : sampler(ma.SR*var1, memchunk5, ratio5);
+        SRSect4(x) = x : sampler(var1, memchunk4, ratio4);
+        SRSect5(x) = x : sampler(var1, memchunk5, ratio5);
         SRLoopSect = 
         \(fb).
         (
@@ -114,7 +117,7 @@ out1, out2
                                 sig1, sig2, sig4,
                                     grainOut1 * (1 - memWriteLev) + 
                                         grainOut2 * memWriteLev 
-                                            ) :> +; 
+                                            ) :> +;
         out2 = 
             (
                 ( sig5 * (1 - triangle3) ),
@@ -124,8 +127,15 @@ out1, out2
                                 sig2 + sig3 + sig7,
                                     grainOut1 * memWriteLev + 
                                         grainOut2 * (1 - memWriteLev)
-                                            ) :> +;
+                                            ) :> +; 
+
+        // ------------------------------------------------------ Signal Flow 3-
+        sf3 = out1, out2, 
+            (out2 : delayfb(var4/2/344, 0)), (out1 : delayfb(var4/2/344, 0)),
+                (out1 : delayfb(var4/344, 0)), (out2 : delayfb(var4/344, 0));
     };
+    
+//process = _ <: _@0, _@4000, _@6000, _@10000 : audibleecosystemics2;
 process = _*.5 <: 
     _*(noise(1):LP1(1000)), 
         _*(noise(2):LP1(1000)), 
