@@ -1,4 +1,7 @@
 declare name "Agostino Di Scipio - AUDIBLE ECOSYSTEMICS n.2";
+declare author "Luca Spanedda";
+declare version "alpha";
+declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 import("stdfaust.lib");
 
 
@@ -136,16 +139,14 @@ sf3
                 (out1 : @(ba.sec2samp(var4/344))), (out2 : @(ba.sec2samp(var4/344)));
     };
     
-//process = _ <: _@0, _@4000, _@6000, _@10000 : audibleecosystemics2;
-process = _*.5 <: 
-    _*(noise(1):LP1(1000)), 
-        _*(noise(2):LP1(1000)), 
-            _*(noise(3):LP1(1000)), 
-                _*(noise(4):LP1(1000)) : 
-                    audibleecosystemics2;
+// TEST! AE2 want 4 different mics in input, here 4 signals from 1 mic (simulation) 
+process = _*.5 <: _*(noise(1):LP1(1000)), _*(noise(2):LP1(1000)), 
+    _*(noise(3):LP1(1000)), _*(noise(4):LP1(1000)) : audibleecosystemics2;
+
 
 
 //-- LIBRARY -------------------------------------------------------------------
+
 //----------------------------------------------------------------- CONSTANTS --
 var1 = 4;
 var2 = 10000; 
@@ -273,7 +274,7 @@ sampler(bufferLenghtSeconds, memChunk, ratio, x) =
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
-delayfb(del,fb) = (+ : de.delay( ba.sec2samp(varMax * 2), ba.sec2samp(del) ))~ _ * (fb);
+delayfb(del,fb) = (+ : de.delay( ba.sec2samp(del), ba.sec2samp(del) ))~ _ * (fb);
 // FB delay line with Normalized output ( 1 - FB Gain )
 /*
 delayfb(del,fb) = (+ : de.delay(ma.SR,ba.sec2samp(d)))~_ * (fb) : * (1-fb)
@@ -320,6 +321,7 @@ triangleWave(f) = triangularFunc(os.phasor(1,f));
 // TPT version of the One Pole and SVF Filter by Vadim Zavalishin
 // reference : (by Will Pirkle)
 // http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
+
 // OnePoleTPT filter function
 onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
     with {
@@ -336,6 +338,7 @@ onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
     };
 LPTPT(cf, x) = onePoleTPT(cf, x) : (_ , ! , !);
 HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
+
 // SVFTPT filter function
 SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
     with{
@@ -378,7 +381,6 @@ BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x) : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         };
-
 // Order Aproximations - Outs
 LP1(CF, x) = x : LPTPT(CF);
 HP1(CF, x) = x : HPTPT(CF);
@@ -387,7 +389,7 @@ HP2(CF, x) = x : HPsvf(CF);
 LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
 HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
 // TEST
-// process = no.noise : LP4(((os.osc(2)+1)/2)*400);
+// process = noise(1) : LP4(((os.osc(2)+1)/2)*400);
 
 //------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
@@ -432,14 +434,14 @@ n.2b / Feedback Study, sound installation (2004).
 - density: cntrlLev: a signal between 0 and 1 (1 max, 0 no grains)
 */
 
+
 /*
 declare name "granular_sampling for AUDIBLE ECOSYSTEMICS n.2";
-declare version "xxx";
 declare author "Luca Spanedda";
 declare author "Dario Sanfilippo";
+declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
-
 grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
 (hann(readingSegment) * buffer(bufferSize, readPtr, x)) : vdelay
     with{
@@ -515,7 +517,7 @@ granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
     
 /*
-// DEMO GUI //////////////////////////////////////////////////////////////
+// DEMO GUI 
 // timeIndex1 - a signal between -1 and -0.5
 GtimeIndex = hslider("timeIndex1", -1, -1, -0.5, .001); 
 // memWriteDel1 - a signal between 0 and 1
@@ -527,6 +529,6 @@ GcntrlLev = hslider("cntrlLev", .5, 0, 1, .001);
 Gvar1 = 3;
 GnVoices = 2;
 GdivDur = 21;
-//////////////////////////////////////////////////////////////////////////
-//process = os.osc(1000) <: granular_sampling(GnVoices,Gvar1,GtimeIndex,GmemWriteDel,GcntrlLev,GdivDur);
+process = os.osc(1000) <: 
+    granular_sampling(GnVoices,Gvar1,GtimeIndex,GmemWriteDel,GcntrlLev,GdivDur);
 */
