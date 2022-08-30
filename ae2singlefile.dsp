@@ -1,5 +1,6 @@
 // TO DO - fix : granulator, sampler, Bandpass filter
 
+
 // import faust standard library
 import("stdfaust.lib");
 
@@ -550,7 +551,6 @@ grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
-
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
 x;
 //    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
