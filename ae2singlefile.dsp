@@ -14,7 +14,7 @@ audibleecosystemics2(mic1, mic2, mic3, mic4) =
 //cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
 //sig1, sig2, sig3, sig4, sig5, sig6, sig7
 //out1, out2
-ecosystemicout
+ae2out
     with{
         // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
@@ -77,15 +77,13 @@ ecosystemicout
         SRSect3(x) = x : sampler(var1, memchunk3, ratio3) 
                        : HP4(50);
             //   BPsvftpt(BW, CF, x) - BANDPASS FILTER
-            BPl = ma.EPSILON; // normalization for filter F/Q
-            BPn = .1; // normalization for filter Gain
+            BPBW1 = diffHL * 400;
+            BPFC1 = (var2 / 2) * memWriteDel2;
+            BPBW2 = (1-diffHL) * 800;
+            BPFC2 = var2 * (1 - memWriteDel1);
             //
-            SRSectBP1(x) = x : SRSect3 : 
-                               BPsvftpt(diffHL*400 + BPl,
-                               (var2/2)*memWriteDel2 + BPl) * BPn;
-            SRSectBP2(x) = x : SRSect3 : 
-                               BPsvftpt((1-diffHL)*800 + BPl,
-                               var2*(1-memWriteDel1) + BPl) * BPn;
+            SRSectBP1(x) = x : SRSect3 : BPsvftpt(400,var2/2);
+            SRSectBP2(x) = x : SRSect3 : BPsvftpt(800,var2);
         SRSect4(x) = x : sampler(var1, memchunk4, ratio4);
         SRSect5(x) = x : sampler(var1, memchunk5, ratio5);
         fbG = 1; // normalization for SampleWriteLoop Feedback
@@ -124,49 +122,50 @@ ecosystemicout
                                                   @(ba.sec2samp(var1 / 1.5)) 
                                                   * directLevel;
         // ------------------------------------------------------ Signal Flow 2b
-        grainOut1 = granular_sampling(1,var1,timeIndex1,memWriteDel1,
-                                              cntrlLev1,21,sampWOut);
-        grainOut2 = granular_sampling(1,var1,timeIndex2,memWriteDel2,
-                                              cntrlLev2,20,sampWOut);
+        grainOut1 = sampWOut <: granular_sampling(4,var1,timeIndex1,
+                                                  memWriteDel1,cntrlLev1,21);
+        grainOut2 = sampWOut <: granular_sampling(4,var1,timeIndex2,
+                                                  memWriteDel2,cntrlLev2,20);
         out1 = 
-            (
-                      ( sig5 : @(ba.sec2samp(.04)) * (1 - triangle3) ),
-                                                  ( sig5 * triangle3 ),
-                     ( sig6 : @(ba.sec2samp(.036)) * (1 - triangle3) ),
-                           ( sig6 : @(ba.sec2samp(.036)) * triangle3 ),
-                                                                  sig1, 
-                                                                  sig2, 
-                                                                  sig4,
-                grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev 
-            ) :> +;
+                (
+                          ( sig5 : @(ba.sec2samp(.04)) * (1 - triangle3) ),
+                                                      ( sig5 * triangle3 ),
+                         ( sig6 : @(ba.sec2samp(.036)) * (1 - triangle3) ),
+                               ( sig6 : @(ba.sec2samp(.036)) * triangle3 ),
+                                                                      sig1, 
+                                                                      sig2, 
+                                                                      sig4,
+                    grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev 
+                ) :> + : limit(1,-1);
         out2 = 
-            (
-                                            ( sig5 * (1 - triangle3) ),
-                           ( sig5 : @(ba.sec2samp(.040)) * triangle3 ),
-                                            ( sig6 * (1 - triangle3) ),
-                                                  ( sig6 * triangle3 ),
-                                                                  sig2, 
-                                                                  sig3, 
-                                                                  sig7,
-                grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev)
-            ) :> +; 
+                (
+                                                ( sig5 * (1 - triangle3) ),
+                               ( sig5 : @(ba.sec2samp(.040)) * triangle3 ),
+                                                ( sig6 * (1 - triangle3) ),
+                                                      ( sig6 * triangle3 ),
+                                                                      sig2, 
+                                                                      sig3, 
+                                                                      sig7,
+                    grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev)
+                ) :> + : limit(1,-1); 
         // ----------------------------------------------------- Signal Flow 3 -
-        sf3(in1,in2) =  in1, 
-                        in2, 
-                        (in2 : @(ba.sec2samp((var4/2)/344))), 
-                        (in1 : @(ba.sec2samp((var4/2)/344))),
-                        (in1 : @(ba.sec2samp(var4/344))), 
-                        (in2 : @(ba.sec2samp(var4/344)));
+        sf3 = (out1,out2) : \(out1, out2).
+                                         (
+                                           out1, 
+                                           out2,
+                                          (out2 : @(ba.sec2samp((var4/2)/344))), 
+                                          (out1 : @(ba.sec2samp((var4/2)/344))),
+                                          (out1 : @(ba.sec2samp(var4/344))), 
+                                          (out2 : @(ba.sec2samp(var4/344)))
+                                         );
         // ----------------------------------------------------------------- OUT
-        ecosystemicout = (limit(1,-1,out1),limit(1,-1,out2)) : sf3;
+        ae2out = sf3;
     };
-
 // TEST with 1 mic
-process = _ :fi.dcblocker <:_@0       , 
-                            _@ma.SR/2 , 
-                            _@ma.SR/3 , 
-                            _@ma.SR/4 :audibleecosystemics2;
-
+process = _ :fi.dcblocker <: _@0       , 
+                             _@ma.SR/2 , 
+                             _@ma.SR/3 , 
+                             _@ma.SR/4 : audibleecosystemics2;
 
 //-------  -------------   -----  ----------- 
 //-- LIBRARY -------------------------------------------------------------------
@@ -291,16 +290,16 @@ primeNumbers(index) = ba.take(index , list)
 limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
-sampler(bufferLenghtSeconds, memChunk, ratio, x) = 
-x;
+sampler(bufferLenghtSeconds, memChunk, ratio, x) = x;
 /*
 it.frwtable(1, 192000 * (var1), .0, ba.period(bufferLenghtSeconds * ma.SR), x, rIdx)
     with {
         readingLength = si.smoo(memChunk) * bufferLenghtSeconds;
         readingRate = ma.SR / readingLength;
         rIdx = os.phasor(readingLength * si.smoo(ratio), readingRate);
-    };                                                                      
-*/
+    };   
+*/                                                                   
+
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
 delayfb(del,fb) = (+ : de.delay(varMax * 2, ba.sec2samp(del) ))~ _ * (fb);
@@ -411,9 +410,7 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = 
-x 
-// SVFTPT(0 : ba.db2linear, Q, CF, x) : !,!,_,!,!,!,!,!
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)*.25) : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         //CFl = limit(20000,ma.EPSILON,CF);
@@ -428,7 +425,7 @@ HP2(CF, x) = x : HPsvf(CF);
 LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
 HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
 // TEST
-//process = noise(1) : BPsvftpt(0, 10000);
+//process = noise(1) : BPsvftpt(1000, 10000);
 
 //------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
@@ -481,8 +478,8 @@ declare author "Dario Sanfilippo";
 declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
-grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
-(hann(readingSegment) * buffer(bufferSize, readPtr, x)) : vdelay
+grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = x
+//hann(readingSegment) * buffer(bufferSize, readPtr, x)
     with{
 
         // density
@@ -530,13 +527,7 @@ grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
         maxGrainDuration = 1.0 / grainRate; 
         // phase segment multiplication factor to complete a Hann cycle in the target duration
         phasorSlopeFactor = maxGrainDuration / min(maxGrainDuration, grainDuration);  
-
-
         readingSegment = min(1.0, phasor * phasorSlopeFactor);
-
-        // decorrelation delay. Instead of 1 control w: hslider("decorrelation", 1, 0, 1, .001)
-        noisePadding = 1 * lock(noise(seed+3)) : abs;
-            vdelay(x) = x : de.sdelay(ma.SR, 1024, noisePadding * ma.SR);
 
         // read pointer
         readPtr = grainPosition * bufferSize + readingSegment 
@@ -552,5 +543,4 @@ grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-x;
-//    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
+    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
