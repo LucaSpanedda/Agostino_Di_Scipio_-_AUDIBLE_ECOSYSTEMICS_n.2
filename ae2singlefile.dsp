@@ -9,12 +9,15 @@ import("stdfaust.lib");
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 
-audibleecosystemics2(mic1, mic2, mic3, mic4) =
+audibleecosystemics2(mic1, mic2, mic3, mic4) = ae2out
 //diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
 //cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
 //sig1, sig2, sig3, sig4, sig5, sig6, sig7
 //out1, out2
-ae2out
+/*
+ratio1, var1*memchunk1, ratio2, var1*memchunk2, ratio3, var1*memchunk3, 
+ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
+*/
     with{
         // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
@@ -62,12 +65,24 @@ ae2out
         triangle2 = triangleWave( var1 * (1 - cntrlMain) );
         triangle3 = triangleWave( 1 / var1 );
         // ------------------------------------------------------ Signal Flow 2a
+            //
             // for Sample Reads:
-            ratio1 = (var2+(diffHL*1000))/261; memchunk1 = (1-memWriteDel2);
-            ratio2 = (var2+(diffHL*1000))/261; memchunk2 = (1-memWriteDel2);
-            ratio3 = (var2+(diffHL*1000))/261; memchunk3 = (1-memWriteDel2);
-            ratio4 = (var2+(diffHL*1000))/261; memchunk4 = (1-memWriteDel2);
-            ratio5 = (var2+(diffHL*1000))/261; memchunk5 = (1-memWriteDel2);
+            ratio1 = 1;//(var2 + (diffHL * 1000))/261; 
+            memchunk1 = .1;//(1 - memWriteDel2);
+            ratio2 = 1;//( 290 - (diffHL * 90))/261; 
+            memchunk2 = .1;//(memWriteLev + memWriteDel1)/2;
+            ratio3 = 1;//((var2 * 2) - (diffHL * 1000))/261; 
+            memchunk3 = .1;//(1 - memWriteDel1);
+            ratio4 = 1;//(250 + (diffHL * 20))/261; 
+            memchunk4 = .1;//1;
+            ratio5 = 1;//.766283; 
+            memchunk5 = .1;//memWriteLev;
+            // for Bandpass Filters:
+            BPBW1 = 400;//diffHL * 400;
+            BPFC1 = var2/2;//(var2 / 2) * memWriteDel2;
+            BPBW2 = 800;//(1 - diffHL) * 800;
+            BPFC2 = var2;//var2 * (1 - memWriteDel1);
+            //
         micIN1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
         micIN2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
         SRSect1(x) = x : sampler(var1, memchunk1, ratio1) 
@@ -76,14 +91,8 @@ ae2out
                        : HP4(50) : @(ba.sec2samp(var1));
         SRSect3(x) = x : sampler(var1, memchunk3, ratio3) 
                        : HP4(50);
-            //   BPsvftpt(BW, CF, x) - BANDPASS FILTER
-            BPBW1 = diffHL * 400;
-            BPFC1 = (var2 / 2) * memWriteDel2;
-            BPBW2 = (1-diffHL) * 800;
-            BPFC2 = var2 * (1 - memWriteDel1);
-            //
-            SRSectBP1(x) = x : SRSect3 : BPsvftpt(400,var2/2);
-            SRSectBP2(x) = x : SRSect3 : BPsvftpt(800,var2);
+            SRSectBP1(x) = x : SRSect3 : BPsvftpt(BPBW1,BPFC1);
+            SRSectBP2(x) = x : SRSect3 : BPsvftpt(BPBW2,BPFC2);
         SRSect4(x) = x : sampler(var1, memchunk4, ratio4);
         SRSect5(x) = x : sampler(var1, memchunk5, ratio5);
         fbG = 1; // normalization for SampleWriteLoop Feedback
@@ -173,7 +182,7 @@ process = _ :fi.dcblocker <: _@0       ,
 
 //----------------------------------------------------------------- CONSTANTS --
 var1 = 4;
-var2 = 10000; 
+var2 = 2000; 
 var3 = .1;
 var4 = 4;
 varMax = max(var1,var4);
@@ -290,15 +299,24 @@ primeNumbers(index) = ba.take(index , list)
 limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
-sampler(bufferLenghtSeconds, memChunk, ratio, x) = x;
-/*
+sampler(bufferLenghtSeconds, memChunk, ratio, x) = 
 it.frwtable(1, 192000 * (var1), .0, ba.period(bufferLenghtSeconds * ma.SR), x, rIdx)
     with {
         readingLength = si.smoo(memChunk) * bufferLenghtSeconds;
         readingRate = ma.SR / readingLength;
         rIdx = os.phasor(readingLength * si.smoo(ratio), readingRate);
+    }; 
+/*
+sampler(var1, memChunk, ratio, x) = 
+rwtable(int(maxDim), .0, int(wIdx), x, int(rIdx))
+    with{
+        maxDim = 192000 * (var1);
+        wIdx = ba.period(var1 * ma.SR); // write for var1 seconds
+        readingLength = (var1 * ma.SR) * memChunk; //read memChunk
+        readingRate = ma.SR / readingLength; // pitch
+        rIdx = os.phasor(1, readingRate * ratio) * readingLength;
     };   
-*/                                                                   
+*/                                                         
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
@@ -439,34 +457,27 @@ implementation should allow for time-stretching (slower memory pointer
 increments at grain level), as well as for "grain density" controls and
 slight random deviations ("jitter") on grain parameters; no frequency shift
 necessary
-
 Granular Sampling -
 version with - Overlap Add To One - Granulator
 for:
 Agostino Di Scipio - AUDIBLE ECOSYSTEMICS
 n.2a / Feedback Study (2003)
 n.2b / Feedback Study, sound installation (2004).
-
 - mem.pointer is the pointer to the next location in the memory
     buffer; in the present notation, it varies between -1 (beginning
     of buffer) and 1 (end of buffer)
 - mem.pointer : timeIndex1 - a signal between -1 and -0.5
-
 - mem.pointer.jitter is a random deviation of the current
     mem.pointer value; any viable method can be used to
     calculate the current actual value of mem.pointer
 - mem.pointer.jitter: (1 - memWriteDel1) / 100
-
 - memWriteDel1 = a signal between 0 and 1
-
 - grain.duration: 0.023 + ((1 - memWriteDel1) / 21) s
-
 - grain.dur.jitter is a random deviation of the current
     grain.duration value: the current actual grain duration =
     grain.duration + (rnd ⋅ grain.dur.jitter(0.1) ⋅ grain.duration)
 - with rnd = random value in the interval [-1, 1]
 - grain.dur.jitter: 0.1 - constant value
-
 - density: cntrlLev: a signal between 0 and 1 (1 max, 0 no grains)
 */
 
@@ -542,5 +553,6 @@ grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = x
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
+    
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
