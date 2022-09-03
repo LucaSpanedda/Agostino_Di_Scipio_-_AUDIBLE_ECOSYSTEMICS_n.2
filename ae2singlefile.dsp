@@ -9,11 +9,12 @@ import("stdfaust.lib");
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 
-audibleecosystemics2(mic1, mic2, mic3, mic4) = ae2out
+audibleecosystemics2(mic1, mic2, mic3, mic4) = 
 //diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
 //cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
 //sig1, sig2, sig3, sig4, sig5, sig6, sig7
 //out1, out2
+ae2out
 /*
 ratio1, var1*memchunk1, ratio2, var1*memchunk2, ratio3, var1*memchunk3, 
 ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
@@ -39,7 +40,7 @@ ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
                             max(0.0, min(1.0));
         memWriteLev = 
             (mic3 + mic4) : integrator(.1) : delayfb(.01,.9) : 
-                LP4(25) : \(x).(1 - (x * x));
+                LP4(25) : \(x).(1 - (x * x)) : limit(1,0);
         memWriteDel1 = memWriteLev : @(ba.sec2samp(var1 / 2));
         memWriteDel2 = memWriteLev : @(ba.sec2samp(var1 / 3));
         cntrlMain = 
@@ -55,7 +56,7 @@ ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
         cntrlMic1 = mic1 : cntrlMic;
         cntrlMic2 = mic2 : cntrlMic;
         directLevel = 
-        // change 0.04 with (grainOut1 + grainOut2) (Faust FB loop)
+        //  from : (grainOut1+grainOut2) - Faust FB loop
             (grainOut1+grainOut2) : integrator(.01) : delayfb(.01,.97) : LP4(.5) 
                 <: _, delayfb(var1 * 2, (1 - var3) * 0.5) : +
                     : \(x).(1 - x * .5);
@@ -145,7 +146,7 @@ ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
                                                                       sig2, 
                                                                       sig4,
                     grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev 
-                ) :> + : limit(1,-1);
+                ) :> +;
         out2 = 
                 (
                                                 ( sig5 * (1 - triangle3) ),
@@ -156,25 +157,26 @@ ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
                                                                       sig3, 
                                                                       sig7,
                     grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev)
-                ) :> + : limit(1,-1); 
+                ) :> +; 
         // ----------------------------------------------------- Signal Flow 3 -
-        sf3 = (out1,out2) : \(out1, out2).
+        sf3 = ( (out1 : limit(1,-1)) ,
+                (out2 : limit(1,-1)) ) : \ (out1, out2).
                                          (
                                            out1, 
                                            out2,
-                                          (out2 : @(ba.sec2samp((var4/2)/344))), 
-                                          (out1 : @(ba.sec2samp((var4/2)/344))),
-                                          (out1 : @(ba.sec2samp(var4/344))), 
-                                          (out2 : @(ba.sec2samp(var4/344)))
+                                          (out2: @(ba.sec2samp((var4/2)/344))), 
+                                          (out1: @(ba.sec2samp((var4/2)/344))),
+                                          (out1: @(ba.sec2samp(var4/344))), 
+                                          (out2: @(ba.sec2samp(var4/344)))
                                          );
         // ----------------------------------------------------------------- OUT
         ae2out = sf3;
     };
 // TEST with 1 mic
-process = _ :fi.dcblocker <: _@0       , 
-                             _@ma.SR/2 , 
-                             _@ma.SR/3 , 
-                             _@ma.SR/4 : audibleecosystemics2;
+process = _ * 100.0 : fi.dcblocker <:   _@0       , 
+                                        _@ma.SR/2 , 
+                                        _@ma.SR/3 , 
+                                        _@ma.SR/4 : audibleecosystemics2;
 
 //-------  -------------   -----  ----------- 
 //-- LIBRARY -------------------------------------------------------------------
