@@ -16,8 +16,8 @@ audibleecosystemics2(mic1, mic2, mic3, mic4) =
 //out1, out2
 ae2out
 /*
-ratio1, var1*memchunk1, ratio2, var1*memchunk2, ratio3, var1*memchunk3, 
-ratio4, var1*memchunk4, ratio5, var1*memchunk5, diffHL
+ratio1, memchunk1, ratio2, memchunk2, ratio3, memchunk3, 
+ratio4, memchunk4, ratio5, memchunk5, diffHL
 */
     with{
         // ------------------------------------------------------ Signal Flow 1a
@@ -301,12 +301,12 @@ primeNumbers(index) = ba.take(index , list)
 limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
-sampler(bufferLenghtSeconds, memChunk, ratio, x) = 
-it.frwtable(1, 192000 * (var1), .0, ba.period(bufferLenghtSeconds * ma.SR), x, rIdx)
+sampler(memSeconds, memChunk, ratio, x) = 
+it.frwtable(1, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
     with {
-        readingLength = si.smoo(memChunk) * bufferLenghtSeconds;
+        readingLength = si.smoo(memChunk) * memSeconds * ma.SR;
         readingRate = ma.SR / readingLength;
-        rIdx = os.phasor(readingLength * si.smoo(ratio), readingRate);
+        rIdx = os.phasor(readingLength, readingRate * si.smoo(ratio));
     }; 
 /*
 sampler(var1, memChunk, ratio, x) = 
