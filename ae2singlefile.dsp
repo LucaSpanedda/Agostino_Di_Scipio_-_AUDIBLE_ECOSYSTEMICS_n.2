@@ -1,9 +1,5 @@
-// TO DO - fix : granulator, sampler, Bandpass filter
-
-
 // import faust standard library
 import("stdfaust.lib");
-
 
 //-------  -------------   -----  ----------- 
 //-- AE2 -----------------------------------------------------------------------
@@ -68,21 +64,21 @@ ratio4, memchunk4, ratio5, memchunk5, diffHL
         // ------------------------------------------------------ Signal Flow 2a
             //
             // for Sample Reads:
-            ratio1 = 1;//(var2 + (diffHL * 1000))/261; 
-            memchunk1 = .1;//(1 - memWriteDel2);
-            ratio2 = 1;//( 290 - (diffHL * 90))/261; 
-            memchunk2 = .1;//(memWriteLev + memWriteDel1)/2;
-            ratio3 = 1;//((var2 * 2) - (diffHL * 1000))/261; 
-            memchunk3 = .1;//(1 - memWriteDel1);
-            ratio4 = 1;//(250 + (diffHL * 20))/261; 
-            memchunk4 = .1;//1;
-            ratio5 = 1;//.766283; 
-            memchunk5 = .1;//memWriteLev;
+            ratio1 = (var2 + (diffHL * 1000))/261; 
+            memchunk1 = (1 - memWriteDel2);
+            ratio2 = ( 290 - (diffHL * 90))/261; 
+            memchunk2 = (memWriteLev + memWriteDel1)/2;
+            ratio3 = ((var2 * 2) - (diffHL * 1000))/261; 
+            memchunk3 = (1 - memWriteDel1);
+            ratio4 = (250 + (diffHL * 20))/261; 
+            memchunk4 = 1;
+            ratio5 = .766283; 
+            memchunk5 = memWriteLev;
             // for Bandpass Filters:
-            BPBW1 = 400;//diffHL * 400;
-            BPFC1 = var2/2;//(var2 / 2) * memWriteDel2;
-            BPBW2 = 800;//(1 - diffHL) * 800;
-            BPFC2 = var2;//var2 * (1 - memWriteDel1);
+            BPBW1 = diffHL * 400;
+            BPFC1 = (var2 / 2) * memWriteDel2;
+            BPBW2 = (1 - diffHL) * 800;
+            BPFC2 = var2 * (1 - memWriteDel1);
             //
         micIN1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
         micIN2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
@@ -132,9 +128,9 @@ ratio4, memchunk4, ratio5, memchunk5, diffHL
                                                   @(ba.sec2samp(var1 / 1.5)) 
                                                   * directLevel;
         // ------------------------------------------------------ Signal Flow 2b
-        grainOut1 = sampWOut <: granular_sampling(4,var1,timeIndex1,
+        grainOut1 = sampWOut <: granular_sampling(2,var1,timeIndex1,
                                                   memWriteDel1,cntrlLev1,21);
-        grainOut2 = sampWOut <: granular_sampling(4,var1,timeIndex2,
+        grainOut2 = sampWOut <: granular_sampling(2,var1,timeIndex2,
                                                   memWriteDel2,cntrlLev2,20);
         out1 = 
                 (
@@ -173,7 +169,7 @@ ratio4, memchunk4, ratio5, memchunk5, diffHL
         ae2out = sf3;
     };
 // TEST with 1 mic
-process = _ * 100.0 : fi.dcblocker <:   _@0       , 
+process = _ * 1.0 : fi.dcblocker <:     _@0       , 
                                         _@ma.SR/2 , 
                                         _@ma.SR/3 , 
                                         _@ma.SR/4 : audibleecosystemics2;
@@ -308,29 +304,10 @@ it.frwtable(1, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
         readingRate = ma.SR / readingLength;
         rIdx = os.phasor(readingLength, readingRate * si.smoo(ratio));
     }; 
-/*
-sampler(var1, memChunk, ratio, x) = 
-rwtable(int(maxDim), .0, int(wIdx), x, int(rIdx))
-    with{
-        maxDim = 192000 * (var1);
-        wIdx = ba.period(var1 * ma.SR); // write for var1 seconds
-        readingLength = (var1 * ma.SR) * memChunk; //read memChunk
-        readingRate = ma.SR / readingLength; // pitch
-        rIdx = os.phasor(1, readingRate * ratio) * readingLength;
-    };   
-*/                                                         
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
 delayfb(del,fb) = (+ : de.delay(varMax * 2, ba.sec2samp(del) ))~ _ * (fb);
-// FB delay line with Normalized output ( 1 - FB Gain )
-/*
-delayfb(del,fb) = (+ : de.delay(ma.SR,ba.sec2samp(d)))~_ * (fb) : * (1-fb)
-with{
-  d = min(0, del);
-  dmax = d : ba.sec2samp : ma.np2;
-};
-*/
 
 //--------------------------------------------------------------- INTEGRATOR ---
 // returns the average absolute value over a specific time frame
@@ -378,7 +355,7 @@ triangleWave(f) = triangularFunc(os.phasor(1,f));
 // OnePoleTPT filter function
 onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
     with {
-        g = tan(cf * ma.PI * ma.T);
+        g = tan(cf * ma.PI * (1/ma.SR));
         G = g / (1.0 + g);
         loop(s) = u , lp , hp , ap
             with {
@@ -430,12 +407,9 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)*.25) : !,!,_,!,!,!,!,!
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF) * .25) : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
-        //CFl = limit(20000,ma.EPSILON,CF);
-        //BWl = limit(20000,ma.EPSILON,BW);
-        //Q = CFl / BWl;
         };
 // Order Aproximations - Outs
 LP1(CF, x) = x : LPTPT(CF);
@@ -491,8 +465,8 @@ declare author "Dario Sanfilippo";
 declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
-grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = x
-//hann(readingSegment) * buffer(bufferSize, readPtr, x)
+grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
+hann(readingSegment) * buffer(bufferSize, readPtr, x)
     with{
 
         // density
@@ -546,7 +520,7 @@ grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = x
         readPtr = grainPosition * bufferSize + readingSegment 
             * (ma.SR / (grainRate * phasorSlopeFactor));
 
-        buffer(length, readPtr, x) = it.frwtable(5, 1920000, .0, writePtr, x, readPtr)
+        buffer(length, readPtr, x) = it.frwtable(1, 1920000, .0, writePtr, x, readPtr)
             with{
                 writePtr = ba.period(length);
             };
