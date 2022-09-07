@@ -1,6 +1,9 @@
 // import faust standard library
 import("stdfaust.lib");
 
+
+
+
 //-------  -------------   -----  ----------- 
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
@@ -11,10 +14,6 @@ audibleecosystemics2(mic1, mic2, mic3, mic4) =
 //sig1, sig2, sig3, sig4, sig5, sig6, sig7
 //out1, out2
 ae2out
-/*
-ratio1, memchunk1, ratio2, memchunk2, ratio3, memchunk3, 
-ratio4, memchunk4, ratio5, memchunk5, diffHL
-*/
     with{
         // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
@@ -33,7 +32,7 @@ ratio4, memchunk4, ratio5, memchunk5, diffHL
                 ((mic3 + mic4) : LP2(var2) : integrator(.10)) : 
                     \(x,y).(x-y) * (1 - SenstoExt) : 
                         delayfb(0.01,0.995) : LP4(25.0) : \(x).(.5 + x * .5) : 
-                            max(0.0, min(1.0));
+                            limit(1,0);
         memWriteLev = 
             (mic3 + mic4) : integrator(.1) : delayfb(.01,.9) : 
                 LP4(25) : \(x).(1 - (x * x)) : limit(1,0);
@@ -41,72 +40,65 @@ ratio4, memchunk4, ratio5, memchunk5, diffHL
         memWriteDel2 = memWriteLev : @(ba.sec2samp(var1 / 3));
         cntrlMain = 
             (mic3 + mic4) * SenstoExt : integrator(.01) : 
-                delayfb(.01,.995) : LP4(25);
+                delayfb(.01,.995) : LP4(25) : limit(1,0);
         cntrlLev1 = cntrlMain : @(ba.sec2samp(var1 / 3));
         cntrlLev2 = cntrlMain : @(ba.sec2samp(var1 / 2));
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
         // ------------------------------------------------------ Signal Flow 1b
         cntrlMic(x) = 
             x : HP1(50) : LP1(6000) : integrator(.01) : 
-                delayfb(.01,.999) : LP4(.5);
+                delayfb(.01,.999) : LP4(.5) : limit(1,0);
         cntrlMic1 = mic1 : cntrlMic;
         cntrlMic2 = mic2 : cntrlMic;
         directLevel = 
         //  from : (grainOut1+grainOut2) - Faust FB loop
-            (grainOut1+grainOut2) : integrator(.01) : delayfb(.01,.97) : LP4(.5) 
-                <: _, delayfb(var1 * 2, (1 - var3) * 0.5) : +
-                    : \(x).(1 - x * .5);
+            (grainOut1+grainOut2) : 
+            //(.009+.009) :
+                limit(1,-1) : integrator(.01) : delayfb(.01,.97) : LP4(.5) 
+                    <: _, delayfb(var1 * 2, (1 - var3) * 0.5) : +
+                        : \(x).(1 - x * .5) : limit(1,0);
         timeIndex1 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x - 2) * 0.5 );
         timeIndex2 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x + 1) * 0.5 );
         triangle1 = triangleWave( 1 / (var1 * 6) ) * memWriteLev;
         triangle2 = triangleWave( var1 * (1 - cntrlMain) );
         triangle3 = triangleWave( 1 / var1 );
         // ------------------------------------------------------ Signal Flow 2a
-            //
-            // for Sample Reads:
-            ratio1 = (var2 + (diffHL * 1000))/261; 
-            memchunk1 = (1 - memWriteDel2);
-            ratio2 = ( 290 - (diffHL * 90))/261; 
-            memchunk2 = (memWriteLev + memWriteDel1)/2;
-            ratio3 = ((var2 * 2) - (diffHL * 1000))/261; 
-            memchunk3 = (1 - memWriteDel1);
-            ratio4 = (250 + (diffHL * 20))/261; 
-            memchunk4 = 1;
-            ratio5 = .766283; 
-            memchunk5 = memWriteLev;
-            // for Bandpass Filters:
-            BPBW1 = diffHL * 400;
-            BPFC1 = (var2 / 2) * memWriteDel2;
-            BPBW2 = (1 - diffHL) * 800;
-            BPFC2 = var2 * (1 - memWriteDel1);
-            //
         micIN1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
         micIN2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
-        SRSect1(x) = x : sampler(var1, memchunk1, ratio1) 
-                       : HP4(50) : @(ba.sec2samp(var1/2));
-        SRSect2(x) = x : sampler(var1, memchunk2, ratio2) 
-                       : HP4(50) : @(ba.sec2samp(var1));
-        SRSect3(x) = x : sampler(var1, memchunk3, ratio3) 
-                       : HP4(50);
-            SRSectBP1(x) = x : SRSect3 : BPsvftpt(BPBW1,BPFC1);
-            SRSectBP2(x) = x : SRSect3 : BPsvftpt(BPBW2,BPFC2);
-        SRSect4(x) = x : sampler(var1, memchunk4, ratio4);
-        SRSect5(x) = x : sampler(var1, memchunk5, ratio5);
+        SRSect1(x) = x : sampler( var1, 
+                                 (1 - memWriteDel2), 
+                                 (var2 + (diffHL * 1000))/261
+                                ) : HP4(50) : @(ba.sec2samp(var1/2));
+        SRSect2(x) = x : sampler( var1, 
+                                  (memWriteLev + memWriteDel1)/2, 
+                                  ( 290 - (diffHL * 90))/261
+                                ) : HP4(50) : @(ba.sec2samp(var1));
+        SRSect3(x) = x : sampler( var1, (1 - memWriteDel1), 
+                                  ((var2 * 2) - (diffHL * 1000))/261
+                                ) : HP4(50);
+            SRSectBP1(x) = x : SRSect3 : 
+                                       BPsvftpt( diffHL * 400, 
+                                                 (var2 / 2) * memWriteDel2);
+            SRSectBP2(x) = x : SRSect3 : 
+                                       BPsvftpt( (1 - diffHL) * 800, 
+                                                 var2 * (1 - memWriteDel1));
+        SRSect4(x) = x : sampler(var1, 1, (250 + (diffHL * 20))/261);
+        SRSect5(x) = x : sampler(var1, memWriteLev, .766283);
         fbG = 1; // normalization for SampleWriteLoop Feedback
-        SampleWriteLoop = loop ~ _ * fbG 
+        SampleWriteLoop = loop ~ _ : limit(1,-1) * fbG, _, _, _, _
             with{
                 loop(fb) = 
                 ( 
-                    ( SRSect1(fb), 
-                    SRSect2(fb), 
-                    SRSectBP1(fb), 
-                    SRSectBP2(fb) :> + ) * (cntrlFeed * memWriteLev) 
+                    ( (fb : SRSect1), 
+                      (fb : SRSect2), 
+                      (fb : SRSectBP1), 
+                      (fb : SRSectBP2) :> + ) * (cntrlFeed * memWriteLev) 
                 )   <: 
                         ( _ + (micIN1+micIN2) : (limit(1,-1) * triangle1) ), 
                           _, 
-                          SRSect4(fb), 
-                          SRSect5(fb), 
-                          SRSect3(fb);
+                          (fb : SRSect4), 
+                          (fb : SRSect5), 
+                          (fb : SRSect3);
             };
         sig1 = micIN1 * directLevel;
         sig2 = micIN2 * directLevel;
@@ -169,10 +161,13 @@ ratio4, memchunk4, ratio5, memchunk5, diffHL
         ae2out = sf3;
     };
 // TEST with 1 mic
-process = _ * 1.0 : fi.dcblocker <:     _@0       , 
+process = _ * 10.0 : fi.dcblocker <:    _@0       , 
                                         _@ma.SR/2 , 
                                         _@ma.SR/3 , 
                                         _@ma.SR/4 : audibleecosystemics2;
+
+
+
 
 //-------  -------------   -----  ----------- 
 //-- LIBRARY -------------------------------------------------------------------
@@ -407,7 +402,7 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF) * .25) : !,!,_,!,!,!,!,!
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)*1) : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         };
@@ -529,6 +524,5 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
-    
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
