@@ -6,7 +6,9 @@ import("stdfaust.lib");
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 process = _ * ( hslider("Mic Gain", 0,0,100,.001) : si.smoo ) :  
-fi.dcblocker    <:      (   _@0, 
+fi.dcblocker    <:      (   .009, 
+                            .009,
+                            _@0, 
                             _@ma.SR/2,
                             _@ma.SR/3,
                             _@ma.SR/4   )
@@ -14,15 +16,14 @@ fi.dcblocker    <:      (   _@0,
                                         : signalflow1b
                                         : signalflow2a
                                         : signalflow2b
-                                        : signalflow3;
+                                        : signalflow3
+                                        : !,!,_,_,_,_,_,_ ;
 //
-signalflow1a( mic1, mic2, mic3, mic4 ) = 
-                            .009, .009,
-                            mic1, mic2, mic3, mic4,
+signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) = 
+                            grainOut1, grainOut2, mic1, mic2, mic3, mic4,
                             diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
                             cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
     with{
-        // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
             (mic3 : integrator(.01) : delayfb(.01,.95)) + 
                 (mic4 : integrator(.01) : delayfb(.01,.95)) : 
@@ -157,11 +158,11 @@ signalflow2a(
 signalflow2b( sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7,
               timeIndex1, timeIndex2, triangle3, 
               memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2
-            ) = out1, out2
+            ) = grainOut1, grainOut2, out1, out2
     with{
-        grainOut1 = sampWOut <: granular_sampling(2,var1,timeIndex1,
+        grainOut1 = sampWOut <: granular_sampling(4,var1,timeIndex1,
                                                   memWriteDel1,cntrlLev1,21);
-        grainOut2 = sampWOut <: granular_sampling(2,var1,timeIndex2,
+        grainOut2 = sampWOut <: granular_sampling(4,var1,timeIndex2,
                                                   memWriteDel2,cntrlLev2,20);
         out1 = 
                 (
@@ -187,7 +188,11 @@ signalflow2b( sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7,
                 ) :> +; 
     };
 //
-signalflow3(out1, out2) =   (out1 : limit(1,-1)),(out2 : limit(1,-1)) : 
+signalflow3(grainOut1, grainOut2, out1, out2) =  
+                                                                grainOut1,
+                                                                grainOut2,
+                        (
+                            (out1 : limit(1,-1)),(out2 : limit(1,-1)) : 
                             \(x,y). (
                                         x, 
                                         y,
@@ -195,7 +200,8 @@ signalflow3(out1, out2) =   (out1 : limit(1,-1)),(out2 : limit(1,-1)) :
                                       ( x: @(ba.sec2samp((var4/2)/344)) ),
                                       ( x: @(ba.sec2samp(var4/344))  ), 
                                       ( y: @(ba.sec2samp(var4/344))  )
-                                    );
+                                    )
+                        );
 
 
 //-------  -------------   -----  ----------- 
@@ -486,7 +492,7 @@ declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
 grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-hann(readingSegment) * buffer(bufferSize, readPtr, x)
+hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
     with{
 
         // density
@@ -539,6 +545,10 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
         // read pointer
         readPtr = grainPosition * bufferSize + readingSegment 
             * (ma.SR / (grainRate * phasorSlopeFactor));
+        
+        // decorrelation delay. Instead of 1 control w: hslider("decorrelation", 1, 0, 1, .001)
+        noisePadding = 1 * lock(noise(seed+3)) : abs;
+            vdelay(x) = x : de.sdelay(ma.SR, 1024, noisePadding * ma.SR);
 
         buffer(length, readPtr, x) = it.frwtable(1, 1920000, .0, writePtr, x, readPtr)
             with{
