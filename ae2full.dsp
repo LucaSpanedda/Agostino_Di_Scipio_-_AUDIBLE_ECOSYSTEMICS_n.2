@@ -13,7 +13,7 @@ import("stdfaust.lib");
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 
-
+// Variables that are to be initialized prior to performance
 var1 = 8;
 var2 = 8000; 
 var3 = .4;
@@ -21,17 +21,20 @@ var4 = 8;
 tabInt = 1; // tables interpolation order (Lagrange)
 grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
 
-
+// Digital Mixer
 Mic1G = ( hslider("Mic 1", 0,0,100,.001) : si.smoo );
 Mic2G = ( hslider("Mic 2", 0,0,100,.001) : si.smoo );
 Mic3G = ( hslider("Mic 3", 0,0,100,.001) : si.smoo );
 Mic4G = ( hslider("Mic 4", 0,0,100,.001) : si.smoo );
+MicMR = ( hslider("Master", 0,0,100,.001) : si.smoo );
+
+// Audible Ecosystemics 2
 process =  
 _ : fi.dcblocker <: ( 
-                      _@0       * Mic1G, 
-                      _@ma.SR/2 * Mic2G,
-                      _@ma.SR/3 * Mic3G,
-                      _@ma.SR/4 * Mic4G   
+                      _@0       * MicMR,//Mic1G, 
+                      _@ma.SR/2 * MicMR,//Mic2G,
+                      _@ma.SR/3 * MicMR,//Mic3G,
+                      _@ma.SR/4 * MicMR //Mic4G   
                                   ) 
                                     : (   signalflow1a
                                         : signalflow1b
