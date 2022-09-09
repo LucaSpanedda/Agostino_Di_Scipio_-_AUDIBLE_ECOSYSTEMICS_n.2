@@ -1,3 +1,10 @@
+declare name "Agostino Di Scipio - AUDIBLE ECOSYSTEMICS n.2";
+declare author "Luca Spanedda";
+declare version "alpha";
+declare description " 2022 version - Realised on composer's instructions 
+of the year 2017 edited in L’Aquila, Italy";
+
+
 // import faust standard library
 import("stdfaust.lib");
 
@@ -5,19 +12,33 @@ import("stdfaust.lib");
 //-------  -------------   -----  ----------- 
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
-process = _ * ( hslider("Mic Gain", 0,0,100,.001) : si.smoo ) :  
-fi.dcblocker    <:      (   .009, 
-                            .009,
-                            _@0, 
-                            _@ma.SR/2,
-                            _@ma.SR/3,
-                            _@ma.SR/4   )
-                                        : signalflow1a
+
+
+var1 = 8;
+var2 = 8000; 
+var3 = .4;
+var4 = 8;
+tabInt = 1; // tables interpolation order (Lagrange)
+grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
+
+
+Mic1G = ( hslider("Mic 1", 0,0,100,.001) : si.smoo );
+Mic2G = ( hslider("Mic 2", 0,0,100,.001) : si.smoo );
+Mic3G = ( hslider("Mic 3", 0,0,100,.001) : si.smoo );
+Mic4G = ( hslider("Mic 4", 0,0,100,.001) : si.smoo );
+process =  
+_ : fi.dcblocker <: ( 
+                      _@0       * Mic1G, 
+                      _@ma.SR/2 * Mic2G,
+                      _@ma.SR/3 * Mic3G,
+                      _@ma.SR/4 * Mic4G   
+                                  ) 
+                                    : (   signalflow1a
                                         : signalflow1b
                                         : signalflow2a
                                         : signalflow2b
-                                        : signalflow3
-                                        : !,!,_,_,_,_,_,_ ;
+                                        :  signalflow3  ) ~ si.bus(2)
+                                                            : !,!,_,_,_,_,_,_;
 //
 signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) = 
                             grainOut1, grainOut2, mic1, mic2, mic3, mic4,
@@ -160,10 +181,12 @@ signalflow2b( sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7,
               memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2
             ) = grainOut1, grainOut2, out1, out2
     with{
-        grainOut1 = sampWOut <: granular_sampling(4,var1,timeIndex1,
-                                                  memWriteDel1,cntrlLev1,21);
-        grainOut2 = sampWOut <: granular_sampling(4,var1,timeIndex2,
-                                                  memWriteDel2,cntrlLev2,20);
+        grainOut1 = sampWOut <: 
+                        granular_sampling(  grainsPAR,var1,timeIndex1,
+                                            memWriteDel1,cntrlLev1,21  );
+        grainOut2 = sampWOut <: 
+                        granular_sampling(  grainsPAR,var1,timeIndex2,
+                                            memWriteDel2,cntrlLev2,20  );
         out1 = 
                 (
                           ( sig5 : @(ba.sec2samp(.04)) * (1 - triangle3) ),
@@ -209,10 +232,7 @@ signalflow3(grainOut1, grainOut2, out1, out2) =
 //-------  --------
 
 //----------------------------------------------------------------- CONSTANTS --
-var1 = 4;
-var2 = 2000; 
-var3 = .1;
-var4 = 4;
+// var 4 and 1 max comparation (max in out)
 varMax = max(var1,var4);
 
 // Prime Numbers List
@@ -328,7 +348,7 @@ limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
 sampler(memSeconds, memChunk, ratio, x) = 
-it.frwtable(1, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
+it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
     with {
         readingLength = si.smoo(memChunk : limit(1,.001)) * memSeconds * ma.SR;
         readingRate = ma.SR / readingLength;
@@ -550,7 +570,7 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
         noisePadding = 1 * lock(noise(seed+3)) : abs;
             vdelay(x) = x : de.sdelay(ma.SR, 1024, noisePadding * ma.SR);
 
-        buffer(length, readPtr, x) = it.frwtable(1, 1920000, .0, writePtr, x, readPtr)
+        buffer(length, readPtr, x) = it.frwtable(tabInt, 1920000, .0, writePtr, x, readPtr)
             with{
                 writePtr = ba.period(length);
             };
@@ -559,6 +579,5 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
-
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
