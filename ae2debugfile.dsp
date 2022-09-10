@@ -1,21 +1,94 @@
+declare name "Agostino Di Scipio - AUDIBLE ECOSYSTEMICS n.2";
+declare author "Luca Spanedda";
+declare version "alpha";
+declare description " 2022 version - Realised on composer's instructions 
+of the year 2017 edited in L’Aquila, Italy";
+
+
 // import faust standard library
 import("stdfaust.lib");
-
-
 
 
 //-------  -------------   -----  ----------- 
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 
-audibleecosystemics2(mic1, mic2, mic3, mic4) = 
-//diffHL, memWriteDel1, memWriteDel2, memWriteLev, cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
-//cntrlMic1, cntrlMic2, directLevel, timeIndex1, timeIndex2, triangle1, triangle2, triangle3
-//sig1, sig2, sig3, sig4, sig5, sig6, sig7
-//out1, out2
-ae2out
+// Variables that are to be initialized prior to performance
+var1 = 4;
+var2 = 2000; 
+var3 = .2;
+var4 = 4;
+tabInt = 2; // tables interpolation order (Lagrange)
+grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
+
+// Digital Mixer
+Mic1G = ( hslider("Mic 1", 0,0,100,.001) : si.smoo );
+Mic2G = ( hslider("Mic 2", 0,0,100,.001) : si.smoo );
+Mic3G = ( hslider("Mic 3", 0,0,100,.001) : si.smoo );
+Mic4G = ( hslider("Mic 4", 0,0,100,.001) : si.smoo );
+MicMR = ( hslider("Master", 0,0,100,.001) : si.smoo );
+
+// Audible Ecosystemics 2
+process =  _ : fi.dcblocker 
+    <: ( 
+        _           * MicMR,//Mic1G, 
+        _@(ma.SR/2) * MicMR,//Mic2G,
+        _@(ma.SR/3) * MicMR,//Mic3G,
+        _@(ma.SR/4) * MicMR //Mic4G   
+                                    ) : 
+                                        ( 
+                                          signalflow1a
+                                        : signalflow1b
+                                        : signalflow2a
+                                        : signalflow2b
+                                        :  signalflow3  
+                                                        ) ~ si.bus(2) :
+
+                                                            // AE2 outs
+                                                            /*
+                                                            si.block(2), 
+                                                            si.bus(2),
+                                                            si.block(28);
+                                                            */
+
+                                                            // Granulator outs
+                                                            /*
+                                                            si.bus(2),
+                                                            si.block(30);
+                                                            */
+
+                                                            // Direct Mics outs
+                                                            /*
+                                                            si.block(4), 
+                                                            _,_,_,_,
+                                                            si.block(24);
+                                                            */
+
+                                                            // sf1a
+                                                            /*
+                                                            si.block(8), 
+                                                            si.bus(8),
+                                                            si.block(16);
+                                                            */
+
+                                                            // sf1b
+                                                            /*
+                                                            si.block(16), 
+                                                            si.bus(8),
+                                                            si.block(8);
+                                                            */
+
+                                                            // sf2a
+                                                            /*
+                                                            si.block(24), 
+                                                            si.bus(8);
+                                                            */
+//
+signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) = 
+                            grainOut1, grainOut2, mic1, mic2, mic3, mic4,
+                            diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                            cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
     with{
-        // ------------------------------------------------------ Signal Flow 1a
         outFromSixPlusSixTimesX = 
             (mic3 : integrator(.01) : delayfb(.01,.95)) + 
                 (mic4 : integrator(.01) : delayfb(.01,.95)) : 
@@ -44,25 +117,51 @@ ae2out
         cntrlLev1 = cntrlMain : @(ba.sec2samp(var1 / 3));
         cntrlLev2 = cntrlMain : @(ba.sec2samp(var1 / 2));
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
-        // ------------------------------------------------------ Signal Flow 1b
+    };
+//
+signalflow1b(   
+                grainOut1, grainOut2,
+                mic1, mic2, mic3, mic4,
+                diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
+                    ) = 
+                        mic1, mic2, mic3, mic4,
+                        diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                        cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                        cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                        timeIndex2, triangle1, triangle2, triangle3
+    with{
         cntrlMic(x) = 
             x : HP1(50) : LP1(6000) : integrator(.01) : 
-                delayfb(.01,.999) : LP4(.5) : limit(1,0);
+                delayfb(.01,.9) : LP4(.5) : limit(1,0); 
+                // delayfb(.01,.999) too much: block .9 better
         cntrlMic1 = mic1 : cntrlMic;
         cntrlMic2 = mic2 : cntrlMic;
         directLevel = 
-        //  from : (grainOut1+grainOut2) - Faust FB loop
-            (grainOut1+grainOut2) : 
-            //(.009+.009) :
-                limit(1,-1) : integrator(.01) : delayfb(.01,.97) : LP4(.5) 
-                    <: _, delayfb(var1 * 2, (1 - var3) * 0.5) : +
-                        : \(x).(1 - x * .5) : limit(1,0);
+            (grainOut1+grainOut2) : integrator(.01) : delayfb(.01,.97) : LP4(.5) 
+                <: _, delayfb(var1 * 2, (1 - var3) * 0.5) : +
+                    : \(x).(1 - x * .5) : limit(1,0);
         timeIndex1 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x - 2) * 0.5 );
         timeIndex2 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x + 1) * 0.5 );
         triangle1 = triangleWave( 1 / (var1 * 6) ) * memWriteLev;
         triangle2 = triangleWave( var1 * (1 - cntrlMain) );
         triangle3 = triangleWave( 1 / var1 );
-        // ------------------------------------------------------ Signal Flow 2a
+    };
+//
+signalflow2a(   
+                mic1, mic2, mic3, mic4,
+                diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                timeIndex2, triangle1, triangle2, triangle3
+                    ) = 
+                        mic1, mic2, mic3, mic4,
+                        diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                        cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                        cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                        timeIndex2, triangle1, triangle2, triangle3,
+                        sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7
+    with{
         micIN1 = mic1 : HP1(50) : LP1(6000) * (1 - cntrlMic1);
         micIN2 = mic2 : HP1(50) : LP1(6000) * (1 - cntrlMic2);
         SRSect1(x) = x : sampler( var1, 
@@ -76,29 +175,31 @@ ae2out
         SRSect3(x) = x : sampler( var1, (1 - memWriteDel1), 
                                   ((var2 * 2) - (diffHL * 1000))/261
                                 ) : HP4(50);
-            SRSectBP1(x) = x : SRSect3 : 
-                                       BPsvftpt( diffHL * 400, 
-                                                 (var2 / 2) * memWriteDel2);
-            SRSectBP2(x) = x : SRSect3 : 
-                                       BPsvftpt( (1 - diffHL) * 800, 
-                                                 var2 * (1 - memWriteDel1));
+            SRSectBP1(x) = x : SRSect3 : BPsvftpt( diffHL 
+                                                   * 400 : limit(1,20000), 
+                                                   (var2 / 2) * memWriteDel2
+                                                   : limit(1,20000) );
+            SRSectBP2(x) = x : SRSect3 : BPsvftpt( (1 - diffHL) 
+                                                    * 800 : limit(1,20000), 
+                                                    var2 * (1 - memWriteDel1)
+                                                    : limit(1,20000) );
         SRSect4(x) = x : sampler(var1, 1, (250 + (diffHL * 20))/261);
         SRSect5(x) = x : sampler(var1, memWriteLev, .766283);
         fbG = 1; // normalization for SampleWriteLoop Feedback
-        SampleWriteLoop = loop ~ _ : limit(1,-1) * fbG, _, _, _, _
+        SampleWriteLoop = loop ~ _ * fbG 
             with{
                 loop(fb) = 
                 ( 
-                    ( (fb : SRSect1), 
-                      (fb : SRSect2), 
-                      (fb : SRSectBP1), 
-                      (fb : SRSectBP2) :> + ) * (cntrlFeed * memWriteLev) 
+                    ( SRSect1(fb), 
+                    SRSect2(fb), 
+                    SRSectBP1(fb), 
+                    SRSectBP2(fb) :> + ) * (cntrlFeed * memWriteLev) 
                 )   <: 
-                        ( _ + (micIN1+micIN2) : (limit(1,-1) * triangle1) ), 
+                        ( _ + (micIN1+micIN2) : _ * triangle1 ), 
                           _, 
-                          (fb : SRSect4), 
-                          (fb : SRSect5), 
-                          (fb : SRSect3);
+                          SRSect4(fb), 
+                          SRSect5(fb), 
+                          SRSect3(fb);
             };
         sig1 = micIN1 * directLevel;
         sig2 = micIN2 * directLevel;
@@ -119,11 +220,30 @@ ae2out
         sig7 = SampleWriteLoop : \(A,B,C,D,E).(E) : 
                                                   @(ba.sec2samp(var1 / 1.5)) 
                                                   * directLevel;
-        // ------------------------------------------------------ Signal Flow 2b
-        grainOut1 = sampWOut <: granular_sampling(2,var1,timeIndex1,
-                                                  memWriteDel1,cntrlLev1,21);
-        grainOut2 = sampWOut <: granular_sampling(2,var1,timeIndex2,
-                                                  memWriteDel2,cntrlLev2,20);
+    };
+//
+signalflow2b( 
+                mic1, mic2, mic3, mic4,
+                diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                timeIndex2, triangle1, triangle2, triangle3,
+                sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7
+                    ) = 
+                        mic1, mic2, mic3, mic4,
+                        diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                        cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                        cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                        timeIndex2, triangle1, triangle2, triangle3,
+                        sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7,
+                        grainOut1, grainOut2, out1, out2
+    with{
+        grainOut1 = sampWOut <: 
+                        granular_sampling(  grainsPAR,var1,timeIndex1,
+                                            memWriteDel1,cntrlLev1,21  );
+        grainOut2 = sampWOut <: 
+                        granular_sampling(  grainsPAR,var1,timeIndex2,
+                                            memWriteDel2,cntrlLev2,20  );
         out1 = 
                 (
                           ( sig5 : @(ba.sec2samp(.04)) * (1 - triangle3) ),
@@ -146,27 +266,27 @@ ae2out
                                                                       sig7,
                     grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev)
                 ) :> +; 
-        // ----------------------------------------------------- Signal Flow 3 -
-        sf3 = ( (out1 : limit(1,-1)) ,
-                (out2 : limit(1,-1)) ) : \ (out1, out2).
-                                         (
-                                           out1, 
-                                           out2,
-                                          (out2: @(ba.sec2samp((var4/2)/344))), 
-                                          (out1: @(ba.sec2samp((var4/2)/344))),
-                                          (out1: @(ba.sec2samp(var4/344))), 
-                                          (out2: @(ba.sec2samp(var4/344)))
-                                         );
-        // ----------------------------------------------------------------- OUT
-        ae2out = sf3;
     };
-// TEST with 1 mic
-process = _ * 10.0 : fi.dcblocker <:    _@0       , 
-                                        _@ma.SR/2 , 
-                                        _@ma.SR/3 , 
-                                        _@ma.SR/4 : audibleecosystemics2;
-
-
+//
+signalflow3 ( 
+                mic1, mic2, mic3, mic4,
+                diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                timeIndex2, triangle1, triangle2, triangle3,
+                sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7,
+                grainOut1, grainOut2, out1, out2
+                    ) =  
+                        grainOut1,
+                        grainOut2,
+                        out1,
+                        out2,
+                        mic1, mic2, mic3, mic4,
+                        diffHL, memWriteDel1, memWriteDel2, memWriteLev, 
+                        cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
+                        cntrlMic1, cntrlMic2, directLevel, timeIndex1, 
+                        timeIndex2, triangle1, triangle2, triangle3,
+                        sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7;
 
 
 //-------  -------------   -----  ----------- 
@@ -174,10 +294,7 @@ process = _ * 10.0 : fi.dcblocker <:    _@0       ,
 //-------  --------
 
 //----------------------------------------------------------------- CONSTANTS --
-var1 = 4;
-var2 = 2000; 
-var3 = .1;
-var4 = 4;
+// var 4 and 1 max comparation (max in out)
 varMax = max(var1,var4);
 
 // Prime Numbers List
@@ -293,9 +410,9 @@ limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
 sampler(memSeconds, memChunk, ratio, x) = 
-it.frwtable(1, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
+it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
     with {
-        readingLength = si.smoo(memChunk) * memSeconds * ma.SR;
+        readingLength = si.smoo(memChunk : limit(1,.001)) * memSeconds * ma.SR;
         readingRate = ma.SR / readingLength;
         rIdx = os.phasor(readingLength, readingRate * si.smoo(ratio));
     }; 
@@ -339,8 +456,6 @@ peakIIR(x) = abs(x) <: loop ~_
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
 triangleWave(f) = triangularFunc(os.phasor(1,f));
-// TEST
-// process = triangleWave(10);
 
 //------------------------------------------------------------------ FILTERS ---
 // TPT version of the One Pole and SVF Filter by Vadim Zavalishin
@@ -402,7 +517,7 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)*1) : !,!,_,!,!,!,!,!
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)) : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         };
@@ -413,8 +528,6 @@ LP2(CF, x) = x : LPsvf(CF);
 HP2(CF, x) = x : HPsvf(CF);
 LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
 HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
-// TEST
-//process = noise(1) : BPsvftpt(1000, 10000);
 
 //------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
@@ -461,7 +574,7 @@ declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
 grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-hann(readingSegment) * buffer(bufferSize, readPtr, x)
+hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
     with{
 
         // density
@@ -514,8 +627,12 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
         // read pointer
         readPtr = grainPosition * bufferSize + readingSegment 
             * (ma.SR / (grainRate * phasorSlopeFactor));
+        
+        // decorrelation delay. Instead of 1 control w: hslider("decorrelation", 1, 0, 1, .001)
+        noisePadding = 1 * lock(noise(seed+3)) : abs;
+            vdelay(x) = x : de.sdelay(ma.SR, 1024, noisePadding * ma.SR);
 
-        buffer(length, readPtr, x) = it.frwtable(1, 1920000, .0, writePtr, x, readPtr)
+        buffer(length, readPtr, x) = it.frwtable(tabInt, 1920000, .0, writePtr, x, readPtr)
             with{
                 writePtr = ba.period(length);
             };
@@ -524,5 +641,6 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
+    
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
