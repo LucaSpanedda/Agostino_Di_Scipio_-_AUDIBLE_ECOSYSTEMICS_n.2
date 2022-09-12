@@ -31,10 +31,10 @@ MicMR = ( hslider("Master", 0,0,100,.001) : si.smoo );
 // Audible Ecosystemics 2
 process =  
 _ : fi.dcblocker <: ( 
-                      _@0       * MicMR,//Mic1G, 
-                      _@ma.SR/2 * MicMR,//Mic2G,
-                      _@ma.SR/3 * MicMR,//Mic3G,
-                      _@ma.SR/4 * MicMR //Mic4G   
+                      _           * MicMR,//Mic1G, 
+                      _@(ma.SR/2) * MicMR,//Mic2G,
+                      _@(ma.SR/3) * MicMR,//Mic3G,
+                      _@(ma.SR/4) * MicMR //Mic4G   
                                   ) 
                                     : (   signalflow1a
                                         : signalflow1b
