@@ -565,7 +565,6 @@ n.2b / Feedback Study, sound installation (2004).
 - density: cntrlLev: a signal between 0 and 1 (1 max, 0 no grains)
 */
 
-
 /*
 declare name "granular_sampling for AUDIBLE ECOSYSTEMICS n.2";
 declare author "Luca Spanedda";
@@ -574,7 +573,7 @@ declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
 grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
+hann(readingSegment) * buffer(bufferSize, readPtr, x)
     with{
 
         // density
@@ -598,9 +597,12 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
             with {
                 loop(y_1) = ph , unlock
                     with{
-                        y_2 = y_1';
-                        ph = os.phasor(1, ba.sAndH(unlock, _grainRate));
-                        unlock = (y_1 < y_2) + 1 - 1';
+                        y_2 = y_1' ;
+                        ph = os.phasor(1, ba.sAndH(unlock, _grainRate)) +
+                                      phDecorrelation : \(x).(x-int(x)) ;
+                        unlock = (y_1 < y_2) + 1 - 1' ;
+                        phDecorrelation = (primeNumbers((seed+1)*2) * 1103515245) 
+                                      /2147483647 ;
                     };
             };
 
@@ -611,11 +613,8 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
         // new param with lock function based on the phasor
         lock(param) = ba.sAndH(unlocking, param);   
 
-        // TO DO: wrap & receive param from AE2
         grainPosition = lock(_grainPosition * positionJitter); 
-        // TO DO: wrap & receive param from AE2
         grainRate = lock(_grainRate);
-        // TO DO: wrap & receive param from AE2
         grainDuration = lock(_grainDuration * durationJitter);
 
         // maximum allowed grain duration in seconds
@@ -627,10 +626,6 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
         // read pointer
         readPtr = grainPosition * bufferSize + readingSegment 
             * (ma.SR / (grainRate * phasorSlopeFactor));
-        
-        // decorrelation delay. Instead of 1 control w: hslider("decorrelation", 1, 0, 1, .001)
-        noisePadding = 1 * lock(noise(seed+3)) : abs;
-            vdelay(x) = x : de.sdelay(ma.SR, 1024, noisePadding * ma.SR);
 
         buffer(length, readPtr, x) = it.frwtable(tabInt, 1920000, .0, writePtr, x, readPtr)
             with{
@@ -641,6 +636,5 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
-    
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
+    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _;
