@@ -528,7 +528,28 @@ LP2(CF, x) = x : LPsvf(CF);
 HP2(CF, x) = x : HPsvf(CF);
 LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
 HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
+// or
+// BUTTERWORTH Aproximations
+butterworthQ(order, stage) = qFactor(order % 2)
+    with {
+        qFactor(0) = 1.0 / (2.0 * cos(((2.0 * stage + 1) * (ma.PI / (order * 2.0)))));
+        qFactor(1) = 1.0 / (2.0 * cos(((stage + 1) * (ma.PI / order))));
+    };
 
+LPButterworthN(1, cf, x) = LPTPT(cf, x);
+LPButterworthN(N, cf, x) = cascade(N % 2)
+    with {
+        cascade(0) = x : seq(i, N / 2, LPSVF(butterworthQ(N, i), cf));
+        cascade(1) = x : LPTPT(cf) : seq(i, (N - 1) / 2, LPSVF(butterworthQ(N, i), cf));
+    };
+
+HPButterworthN(1, cf, x) = HPTPT(cf, x);
+HPButterworthN(N, cf, x) = cascade(N % 2)
+    with {
+        cascade(0) = x : seq(i, N / 2, HPSVF(butterworthQ(N, i), cf));
+        cascade(1) = x : HPTPT(cf) : seq(i, (N - 1) / 2, HPSVF(butterworthQ(N, i), cf));
+    };
+    
 //------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
 noise(seed) = (+(primeNumbers(seed + 1)) ~ *(1103515245)) / 2147483647;
@@ -636,5 +657,6 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
+    
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
     grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _;
