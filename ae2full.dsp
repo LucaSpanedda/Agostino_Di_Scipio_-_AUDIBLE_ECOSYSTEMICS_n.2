@@ -14,29 +14,23 @@ import("stdfaust.lib");
 //-------  --------
 
 // Variables that are to be initialized prior to performance
-var1 = 8;
-var2 = 8000; 
-var3 = .4;
-var4 = 8;
-tabInt = 1; // tables interpolation order (Lagrange)
-grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
+var1 = 3;
+var2 = 10000; 
+var3 = .2;
+var4 = 3;
+tabInt = 2; // tables interpolation order (Lagrange)
+grainsPAR = 16; // parallel granulator Instances (for 2 granulators)
 
 // Digital Mixer
-Mic1G = ( hslider("Mic 1", 0,0,100,.001) : si.smoo );
-Mic2G = ( hslider("Mic 2", 0,0,100,.001) : si.smoo );
-Mic3G = ( hslider("Mic 3", 0,0,100,.001) : si.smoo );
-Mic4G = ( hslider("Mic 4", 0,0,100,.001) : si.smoo );
-MicMR = ( hslider("Master", 0,0,100,.001) : si.smoo );
+Mic1G = ( hslider("Mic 1", 1,0,10,.001) : si.smoo );
+Mic2G = ( hslider("Mic 2", 1,0,10,.001) : si.smoo );
+Mic3G = ( hslider("Mic 3", 1,0,10,.001) : si.smoo );
+Mic4G = ( hslider("Mic 4", 1,0,10,.001) : si.smoo );
 
 // Audible Ecosystemics 2
-process =  
-_ : fi.dcblocker <: ( 
-                      _           * MicMR,//Mic1G, 
-                      _@(ma.SR/2) * MicMR,//Mic2G,
-                      _@(ma.SR/3) * MicMR,//Mic3G,
-                      _@(ma.SR/4) * MicMR //Mic4G   
-                                  ) 
-                                    : (   signalflow1a
+process =  _,_ : 
+                \(M1,M2).( M1 * Mic1G, M2 * Mic1G, M1 * Mic1G, M2 * Mic1G ) : 
+                                    (     signalflow1a
                                         : signalflow1b
                                         : signalflow2a
                                         : signalflow2b
@@ -350,6 +344,7 @@ primeNumbers(index) = ba.take(index , list)
 limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
+/*
 sampler(memSeconds, memChunk, ratio, x) = 
 it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
     with {
@@ -357,6 +352,14 @@ it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
         readingRate = ma.SR / readingLength;
         rIdx = os.phasor(readingLength, readingRate * si.smoo(ratio));
     }; 
+*/
+sampler(memBuffer, maxChunk, ratio, x) =
+it.frwtable(tabInt, 192000 * (memBuffer), .0, ba.period(memBuffer * ma.SR), x, rIdx)
+    with {
+    //clip the smallest chunk
+    memChunk(maxChunk) = (maxChunk  : max(0.001, min(1))) * memBuffer * ma.SR;
+    rIdx = os.phasor(memChunk(maxChunk), (ma.SR / memChunk  (maxChunk)) * ratio);
+    };
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
@@ -379,21 +382,29 @@ integrator(seconds, x) = RMSRectangular(seconds, x);
 // returns the maximum signal amplitude (absolute value) in a given time frame;
 // frame duration is dynamically adjusted: the next frame duration is set at the
 // end of the previous frame
-peakHolder(resetPeriod, x) = y
+/*
+peakHolder(secondsPeriod, x) = y
     letrec {
         'y = ba.if(reset, abs(x), max(y, abs(x)));
     }
         with {
-            reset = os.phasor(1, 1.0 / resetPeriod) : \(x).(x < x');
+            reset = os.phasor(1, 1.0 / secondsPeriod) : \(x).(x < x');
         };
-
+*/
+// holdTime in Seconds
+peakHolder(holdTime, x) = loop ~ si.bus(2) : ! , _
+    with {
+        loop(timerState, outState) = timer , output
+            with {
+                isNewPeak = abs(x) >= outState;
+                isTimeOut = timerState >= (holdTime * ma.SR - 1);
+                bypass = isNewPeak | isTimeOut;
+                timer = ba.if(bypass, 0, timerState + 1);
+                output = ba.if(bypass, abs(x), outState);
+            };
+    };
 localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
 
-// IIR Peak
-peakIIR(x) = abs(x) <: loop ~_
-    with{
-        loop = ((_,_) : max);
-    };
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
 triangleWave(f) = triangularFunc(os.phasor(1,f));
@@ -458,7 +469,7 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)) : !,!,_,!,!,!,!,!
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x )   : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         };

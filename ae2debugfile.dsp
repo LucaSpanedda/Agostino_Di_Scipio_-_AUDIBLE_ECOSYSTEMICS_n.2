@@ -14,28 +14,22 @@ import("stdfaust.lib");
 //-------  --------
 
 // Variables that are to be initialized prior to performance
-var1 = 4;
+var1 = 1;
 var2 = 2000; 
 var3 = .2;
-var4 = 4;
-tabInt = 2; // tables interpolation order (Lagrange)
-grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
+var4 = 1;
+tabInt = 1; // tables interpolation order (Lagrange)
+grainsPAR = 16; // parallel granulator Instances (for 2 granulators)
 
 // Digital Mixer
-Mic1G = ( hslider("Mic 1", 0,0,100,.001) : si.smoo );
-Mic2G = ( hslider("Mic 2", 0,0,100,.001) : si.smoo );
-Mic3G = ( hslider("Mic 3", 0,0,100,.001) : si.smoo );
-Mic4G = ( hslider("Mic 4", 0,0,100,.001) : si.smoo );
-MicMR = ( hslider("Master", 0,0,100,.001) : si.smoo );
+Mic1G = ( hslider("Mic 1", 1,0,1,.001) : si.smoo );
+Mic2G = ( hslider("Mic 2", 1,0,1,.001) : si.smoo );
+Mic3G = ( hslider("Mic 3", 1,0,1,.001) : si.smoo );
+Mic4G = ( hslider("Mic 4", 1,0,1,.001) : si.smoo );
 
 // Audible Ecosystemics 2
-process =  _ : fi.dcblocker 
-    <: ( 
-        _           * MicMR,//Mic1G, 
-        _@(ma.SR/2) * MicMR,//Mic2G,
-        _@(ma.SR/3) * MicMR,//Mic3G,
-        _@(ma.SR/4) * MicMR //Mic4G   
-                                    ) : 
+process =  _,_ : 
+                \(M1,M2).( M1 * Mic1G, M2 * Mic2G, M1 * Mic3G, M2 * Mic4G ) : 
                                         ( 
                                           signalflow1a
                                         : signalflow1b
@@ -45,11 +39,11 @@ process =  _ : fi.dcblocker
                                                         ) ~ si.bus(2) :
 
                                                             // AE2 outs
-                                                            /*
+                                                            
                                                             si.block(2), 
                                                             si.bus(2),
                                                             si.block(28);
-                                                            */
+                                                            
 
                                                             // Granulator outs
                                                             /*
@@ -409,6 +403,7 @@ primeNumbers(index) = ba.take(index , list)
 limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
+/*
 sampler(memSeconds, memChunk, ratio, x) = 
 it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
     with {
@@ -416,6 +411,14 @@ it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
         readingRate = ma.SR / readingLength;
         rIdx = os.phasor(readingLength, readingRate * si.smoo(ratio));
     }; 
+*/
+sampler(memBuffer, maxChunk, ratio, x) =
+it.frwtable(tabInt, 192000 * (memBuffer), .0, ba.period(memBuffer * ma.SR), x, rIdx)
+    with {
+    //clip the smallest chunk
+    memChunk(maxChunk) = (maxChunk  : max(0.001, min(1))) * memBuffer * ma.SR;
+    rIdx = os.phasor(memChunk(maxChunk), (ma.SR / memChunk  (maxChunk)) * ratio);
+    };
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
@@ -438,21 +441,29 @@ integrator(seconds, x) = RMSRectangular(seconds, x);
 // returns the maximum signal amplitude (absolute value) in a given time frame;
 // frame duration is dynamically adjusted: the next frame duration is set at the
 // end of the previous frame
-peakHolder(resetPeriod, x) = y
+/*
+peakHolder(secondsPeriod, x) = y
     letrec {
         'y = ba.if(reset, abs(x), max(y, abs(x)));
     }
         with {
-            reset = os.phasor(1, 1.0 / resetPeriod) : \(x).(x < x');
+            reset = os.phasor(1, 1.0 / secondsPeriod) : \(x).(x < x');
         };
-
+*/
+// holdTime in Seconds
+peakHolder(holdTime, x) = loop ~ si.bus(2) : ! , _
+    with {
+        loop(timerState, outState) = timer , output
+            with {
+                isNewPeak = abs(x) >= outState;
+                isTimeOut = timerState >= (holdTime * ma.SR - 1);
+                bypass = isNewPeak | isTimeOut;
+                timer = ba.if(bypass, 0, timerState + 1);
+                output = ba.if(bypass, abs(x), outState);
+            };
+    };
 localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
 
-// IIR Peak
-peakIIR(x) = abs(x) <: loop ~_
-    with{
-        loop = ((_,_) : max);
-    };
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
 triangleWave(f) = triangularFunc(os.phasor(1,f));
@@ -517,7 +528,7 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : _,!,!,!,!,!,!,!;
 HPsvf(CF, x) = SVFTPT(0 : ba.db2linear, 0 : ba.db2linear, CF, x) : !,_,!,!,!,!,!,!;
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x*(BW/CF)) : !,!,_,!,!,!,!,!
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x )   : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         };
@@ -528,28 +539,7 @@ LP2(CF, x) = x : LPsvf(CF);
 HP2(CF, x) = x : HPsvf(CF);
 LP4(CF, x) = x : LPsvf(CF) : LPsvf(CF);
 HP4(CF, x) = x : HPsvf(CF) : HPsvf(CF);
-// or
-// BUTTERWORTH Aproximations
-butterworthQ(order, stage) = qFactor(order % 2)
-    with {
-        qFactor(0) = 1.0 / (2.0 * cos(((2.0 * stage + 1) * (ma.PI / (order * 2.0)))));
-        qFactor(1) = 1.0 / (2.0 * cos(((stage + 1) * (ma.PI / order))));
-    };
 
-LPButterworthN(1, cf, x) = LPTPT(cf, x);
-LPButterworthN(N, cf, x) = cascade(N % 2)
-    with {
-        cascade(0) = x : seq(i, N / 2, LPSVF(butterworthQ(N, i), cf));
-        cascade(1) = x : LPTPT(cf) : seq(i, (N - 1) / 2, LPSVF(butterworthQ(N, i), cf));
-    };
-
-HPButterworthN(1, cf, x) = HPTPT(cf, x);
-HPButterworthN(N, cf, x) = cascade(N % 2)
-    with {
-        cascade(0) = x : seq(i, N / 2, HPSVF(butterworthQ(N, i), cf));
-        cascade(1) = x : HPTPT(cf) : seq(i, (N - 1) / 2, HPSVF(butterworthQ(N, i), cf));
-    };
-    
 //------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
 noise(seed) = (+(primeNumbers(seed + 1)) ~ *(1103515245)) / 2147483647;
@@ -586,6 +576,7 @@ n.2b / Feedback Study, sound installation (2004).
 - density: cntrlLev: a signal between 0 and 1 (1 max, 0 no grains)
 */
 
+
 /*
 declare name "granular_sampling for AUDIBLE ECOSYSTEMICS n.2";
 declare author "Luca Spanedda";
@@ -594,7 +585,7 @@ declare version "alpha";
 declare description "Realised on composer's instructions of the year 2017 edited in L’Aquila, Italy";
 */
 grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-hann(readingSegment) * buffer(bufferSize, readPtr, x)
+hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
     with{
 
         // density
@@ -618,12 +609,9 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
             with {
                 loop(y_1) = ph , unlock
                     with{
-                        y_2 = y_1' ;
-                        ph = os.phasor(1, ba.sAndH(unlock, _grainRate)) +
-                                      phDecorrelation : \(x).(x-int(x)) ;
-                        unlock = (y_1 < y_2) + 1 - 1' ;
-                        phDecorrelation = (primeNumbers((seed+1)*2) * 1103515245) 
-                                      /2147483647 ;
+                        y_2 = y_1';
+                        ph = os.phasor(1, ba.sAndH(unlock, _grainRate));
+                        unlock = (y_1 < y_2) + 1 - 1';
                     };
             };
 
@@ -634,8 +622,11 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
         // new param with lock function based on the phasor
         lock(param) = ba.sAndH(unlocking, param);   
 
+        // TO DO: wrap & receive param from AE2
         grainPosition = lock(_grainPosition * positionJitter); 
+        // TO DO: wrap & receive param from AE2
         grainRate = lock(_grainRate);
+        // TO DO: wrap & receive param from AE2
         grainDuration = lock(_grainDuration * durationJitter);
 
         // maximum allowed grain duration in seconds
@@ -647,6 +638,10 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
         // read pointer
         readPtr = grainPosition * bufferSize + readingSegment 
             * (ma.SR / (grainRate * phasorSlopeFactor));
+        
+        // decorrelation delay. Instead of 1 control w: hslider("decorrelation", 1, 0, 1, .001)
+        noisePadding = 1 * lock(noise(seed+3)) : abs;
+            vdelay(x) = x : de.sdelay(ma.SR, 1024, noisePadding * ma.SR);
 
         buffer(length, readPtr, x) = it.frwtable(tabInt, 1920000, .0, writePtr, x, readPtr)
             with{
@@ -657,6 +652,5 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x)
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) = 
     par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
-    
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _;
+    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
