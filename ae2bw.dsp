@@ -39,7 +39,7 @@ Mic3G = ( hslider("Mic 3", 1,0,1,.001) : si.smoo );
 Mic4G = ( hslider("Mic 4", 1,0,1,.001) : si.smoo );
 
 // Audible Ecosystemics 2
-process =  _,_@(ma.SR/4) :
+process =  _,_ :
                 \(M1,M2).( M1 * Mic1G, M2 * Mic2G, M1 * Mic3G, M2 * Mic4G ) :
                                         (
                                           signalflow1a
@@ -541,11 +541,19 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
 // Filters Bank
 LPSVF(Q, CF, x) =   SVFTPT(0, Q, CF, x) : _,!,!,!,!,!,!,!;
 HPSVF(Q, CF, x) =   SVFTPT(0, Q, CF, x) : !,_,!,!,!,!,!,!;
+/*
 BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x )   : !,!,_,!,!,!,!,!
     with{
         Q = CF / BW;
         };
-
+*/
+BPsvftpt(bw, fc, x) =   x : fi.bandpass(1,    
+                                fcn(fc,bw)-(bw/2) : max(1, min(20000)),
+                                fcn(fc,bw)+(bw/2) : max(1, min(20000)))
+                                    with{
+                                        fcn(fc,bw) = fc : max(bw/2);
+                                        };
+                                        
 // Butterworth
 butterworthQ(order, stage) = qFactor(order % 2)
     with {
