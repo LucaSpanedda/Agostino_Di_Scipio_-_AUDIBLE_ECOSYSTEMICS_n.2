@@ -4,7 +4,6 @@ declare version "alpha";
 declare description " 2022 version - Realised on composer's instructions
 of the year 2017 edited in L’Aquila, Italy";
 
-
 // import faust standard library
 import("stdfaust.lib");
 
@@ -20,6 +19,7 @@ var3 = .2;
 var4 = 1;
 tabInt = 1; // tables interpolation order (Lagrange)
 grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
+inspectorTime = .01;
 /*
 var1 =  distance (in meters) between the two farthest removed loudspeakers 
         on the left-right axis.
@@ -32,16 +32,8 @@ var4 =  distance (in meters) between the two farthest removed loudspeakers
         on the front-rear axis.
 */
 
-// Digital Mixer
-Mic1G = ( hslider("Mic 1", 1,0,1,.001) : si.smoo );
-Mic2G = ( hslider("Mic 2", 1,0,1,.001) : si.smoo );
-Mic3G = ( hslider("Mic 3", 1,0,1,.001) : si.smoo );
-Mic4G = ( hslider("Mic 4", 1,0,1,.001) : si.smoo );
-
 // Audible Ecosystemics 2
-
-process =  _,_ :
-                \(M1,M2).( M1 * Mic1G, M2 * Mic2G, M1 * Mic3G, M2 * Mic4G ) :
+process =  _,_ : \(M1,M2).( M1, M2, M1, M2 ) :
                                         (
                                           signalflow1a
                                         : signalflow1b
@@ -49,45 +41,9 @@ process =  _,_ :
                                         : signalflow2b
                                         :  signalflow3
                                                         ) ~ si.bus(2) :
-
                                                             // AE2 outs
-
                                                             si.block(2),
-                                                            si.bus(2),
-                                                            si.block(28);
-
-                                                            // Granulator outs
-                                                            /*
-                                                            si.bus(2),
-                                                            si.block(30);
-                                                            */
-
-                                                            // Direct Mics outs
-                                                            /*
-                                                            si.block(4),
-                                                            _,_,_,_,
-                                                            si.block(24);
-                                                            */
-
-                                                            // sf1a
-                                                            /*
-                                                            si.block(8),
-                                                            si.bus(8),
-                                                            si.block(16);
-                                                            */
-
-                                                            // sf1b
-                                                            /*
-                                                            si.block(16),
-                                                            si.bus(8),
-                                                            si.block(8);
-                                                            */
-
-                                                            // sf2a
-                                                            /*
-                                                            si.block(24),
-                                                            si.bus(8);
-                                                            */
+                                                            si.bus(2);
 //
 signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                             grainOut1, grainOut2, mic1, mic2, mic3, mic4,
@@ -97,7 +53,7 @@ signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
         outFromSixPlusSixTimesX =
             (mic3 : integrator(.01) : delayfb(.01,.95)) +
                 (mic4 : integrator(.01) : delayfb(.01,.95)) :
-                    limit(1,0) : \(x).(6 + x * 6);
+                    \(x).(6 + x * 6);
         localMaxDiff =
             ((outFromSixPlusSixTimesX, mic3) : localmax) ,
                 ((outFromSixPlusSixTimesX, mic4) : localmax) :
@@ -110,18 +66,90 @@ signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                 ((mic3 + mic4) : LPButterworthN(3, var2) : integrator(.10)) :
                     \(x,y).(x-y) * (1 - SenstoExt) :
                         delayfb(0.01,0.995) : LPButterworthN(5, 25.0) : 
-                        \(x).(.5 + x * .5) : limit(1,0);
+                        \(x).(.5 + x * .5) : 
+                // LIMIT - max - min
+                limit(1, -1) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[1] diffHL [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         memWriteLev =
             (mic3 + mic4) : integrator(.1) : delayfb(.01,.9) :
-                LPButterworthN(5, 25) : \(x).(1 - (x * x)) : limit(1,0);
-        memWriteDel1 = memWriteLev : @(ba.sec2samp(var1 / 2));
-        memWriteDel2 = memWriteLev : @(ba.sec2samp(var1 / 3));
+                LPButterworthN(5, 25) : \(x).(1 - (x * x)) : 
+                // LIMIT - max - min
+                limit(1, 0) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[4] memWriteLev [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        memWriteDel1 = memWriteLev : @(ba.sec2samp(var1 / 2)) : 
+                // LIMIT - max - min
+                limit(1, 0) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[2] memWriteDel1 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        memWriteDel2 = memWriteLev : @(ba.sec2samp(var1 / 3)) : 
+                // LIMIT - max - min
+                limit(1, 0) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[3] memWriteDel2 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
         cntrlMain =
             (mic3 + mic4) * SenstoExt : integrator(.01) :
-                delayfb(.01,.995) : LPButterworthN(5, 25) : limit(1,0);
-        cntrlLev1 = cntrlMain : @(ba.sec2samp(var1 / 3));
-        cntrlLev2 = cntrlMain : @(ba.sec2samp(var1 / 2));
-        cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0));
+                delayfb(.01,.995) : LPButterworthN(5, 25) : 
+                // LIMIT - max - min
+                limit(1, 0) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[8] cntrlMain [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        cntrlLev1 = cntrlMain : @(ba.sec2samp(var1 / 3)) : 
+                // LIMIT - max - min
+                limit(1, 0) : 
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[5] cntrlLev1 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        cntrlLev2 = cntrlMain : @(ba.sec2samp(var1 / 2)) : 
+                // LIMIT - max - min
+                limit(1, 0) : 
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[6] cntrlLev2 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0)) : 
+                // LIMIT - max - min
+                limit(1, 0) : 
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1a",
+                        vbargraph("[7] cntrlFeed [style:numerical]", 0, 1)
+                    )
+                ) : attach;
     };
 //
 signalflow1b(
@@ -138,20 +166,91 @@ signalflow1b(
     with{
         cntrlMic(x) =
             x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,.999) : LPButterworthN(5, .5) : 
-                limit(1,0);
-        cntrlMic1 = mic1 : cntrlMic;
-        cntrlMic2 = mic2 : cntrlMic;
+                integrator(.01) : delayfb(.01,.999) : LPButterworthN(5, .5);
+        cntrlMic1 = mic1 : cntrlMic : 
+        // LIMIT - max - min
+        limit(1, 0) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("cntrlMic1 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        cntrlMic2 = mic2 : cntrlMic : 
+        // LIMIT - max - min
+        limit(1, 0) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("cntrlMic2 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
         directLevel =
               (grainOut1+grainOut2) : integrator(.01) : delayfb(.01,.97) : 
               LPButterworthN(5, .5)
                 <: _, delayfb(var1 * 2, (1 - var3) * 0.5) : +
-                    : \(x).(1 - x * .5) : limit(1,0);
-        timeIndex1 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x - 2) * 0.5 );
-        timeIndex2 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x + 1) * 0.5 );
-        triangle1 = triangleWave( 1 / (var1 * 6) ) * memWriteLev;
-        triangle2 = triangleWave( var1 * (1 - cntrlMain) );
-        triangle3 = triangleWave( 1 / var1 );
+                    : \(x).(1 - x * .5) : 
+        // LIMIT - max - min
+        limit(1, 0) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("directLevel [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        timeIndex1 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x - 2) * 0.5 ) : 
+        // LIMIT - max - min
+        limit(1, -1) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("timeIndex1 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
+        timeIndex2 = triangleWave( 1 / (var1 * 2) ) : \(x).( (x + 1) * 0.5 ) : 
+        // LIMIT - max - min
+        limit(1, -1) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("timeIndex2 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
+        triangle1 = triangleWave( 1 / (var1 * 6) ) * memWriteLev : 
+        // LIMIT - max - min
+        limit(1, 0) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("triangle1 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        triangle2 = triangleWave( var1 * (1 - cntrlMain) ) : 
+        // LIMIT - max - min
+        limit(1, 0) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("triangle2 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
+        triangle3 = triangleWave( 1 / var1 ) : 
+        // LIMIT - max - min
+        limit(1, 0) :
+        // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_1b",
+                        vbargraph("triangle3 [style:numerical]", 0, 1)
+                    )
+                ) : attach;
     };
 //
 signalflow2a(
@@ -211,25 +310,88 @@ signalflow2a(
                           SRSect5(fb),
                           SRSect3(fb);
             };
-        sig1 = micIN1 * directLevel;
-        sig2 = micIN2 * directLevel;
+        sig1 = micIN1 * directLevel : 
+        // LIMIT - max - min
+        limit(1, -1) : 
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig1 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
+        sig2 = micIN2 * directLevel : 
+        // LIMIT - max - min
+        limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig2 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         sampWOut = SampleWriteLoop : \(A,B,C,D,E).(A);
         sig3 = SampleWriteLoop : \(A,B,C,D,E).(B) :
                                                   _ * memWriteLev :
                                                   delayfb(.05 * cntrlMain, 0)
-                                                  * triangle2 * directLevel;
+                                                  * triangle2 * directLevel : 
+        // LIMIT - max - min
+        limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig3 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         sig4 = SampleWriteLoop : \(A,B,C,D,E).(B) :
                                                   _ * memWriteLev
-                                                  * (1-triangle2) * directLevel;
+                                                  * (1-triangle2) * directLevel : 
+        // LIMIT - max - min
+        limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig4 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         sig5 = SampleWriteLoop : \(A,B,C,D,E).(C) :
                                                   HPButterworthN(4, 50) :
-                                                  @(ba.sec2samp(var1 / 3));
+                                                  @(ba.sec2samp(var1 / 3)) : 
+        // LIMIT - max - min
+        limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig5 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         sig6 = SampleWriteLoop : \(A,B,C,D,E).(D) :
                                                   HPButterworthN(4, 50) :
-                                                  @(ba.sec2samp(var1 / 2.5));
+                                                  @(ba.sec2samp(var1 / 2.5)) : 
+        // LIMIT - max - min
+        limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig6 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         sig7 = SampleWriteLoop : \(A,B,C,D,E).(E) :
                                                   @(ba.sec2samp(var1 / 1.5))
-                                                  * directLevel;
+                                                  * directLevel : 
+        // LIMIT - max - min
+        limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2a",
+                        vbargraph("sig7 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
     };
 //
 signalflow2b(
@@ -264,7 +426,16 @@ signalflow2b(
                                                                       sig2,
                                                                       sig4,
                     grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev
-                ) :> +;
+                ) :> + : 
+                // LIMIT - max - min
+                limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2b",
+                        vbargraph("out1 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
         out2 =
                 (
                                                 ( sig5 * (1 - triangle3) ),
@@ -275,7 +446,16 @@ signalflow2b(
                                                                       sig3,
                                                                       sig7,
                     grainOut1 * memWriteLev + grainOut2 * (1 - memWriteLev)
-                ) :> +;
+                ) :> + : 
+                // LIMIT - max - min
+                limit(1, -1) :  
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("signal_flow_2b",
+                        vbargraph("out2 [style:numerical]", -1, 1)
+                    )
+                ) : attach;
     };
 //
 signalflow3 (
@@ -290,25 +470,35 @@ signalflow3 (
                         grainOut1,
                         grainOut2,
                         out1,
-                        out2,
-                        mic1, mic2, mic3, mic4,
-                        diffHL, memWriteDel1, memWriteDel2, memWriteLev,
-                        cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain,
-                        cntrlMic1, cntrlMic2, directLevel, timeIndex1,
-                        timeIndex2, triangle1, triangle2, triangle3,
-                        sampWOut, sig1, sig2, sig3, sig4, sig5, sig6, sig7;
+                        out2;
 
 
 //-------  -------------   -----  -----------
 //-- LIBRARY -------------------------------------------------------------------
 //-------  --------
 
-//----------------------------------------------------------------- CONSTANTS --
+//----------------------------------------------------------------- UTILITIES --
 
+// only decimal pass
+decimal(x) = x-int(x);
 // limit function for library and system
 limit(maxl,minl,x) = x : max(minl, min(maxl));
+// classic phasor
+phasor(f) = (f/ma.SR):(+ :\(x).(selector(0,x,0)) : decimal)~_ ;
+// binary selector 0 - 1
+selector(sel,x,y) = ( x * (1-sel) + y * (sel) );
+// SAH with internal trigger
+SAH2(sec,y) = \(FB).( selector( phasor(1/sec) : \(x).(x < x'), FB, y ) )~ _ ;
+// see signal values 
+inspect(i, seconds, lower, upper) = _ <: _ ,  
+                (   SAH2(seconds) : 
+                    vbargraph("sig_%2i [style:numerical]", lower, upper)
+                ) : attach;
+//process = (os.osc(.01) : inspect(1, .1, -1, 1));
 // var 4 and 1 max comparation (max in out)
 varMax = max(var1 * 2, var4 * 2);
+
+//----------------------------------------------------------------- CONSTANTS --
 
 // Prime Numbers List
 primes =
@@ -593,46 +783,6 @@ HPButterworthN(N, cf, x) = cascade(N % 2)
 noise(seed) = (+(primeNumbers(seed + 1)) ~ *(1103515245)) / 2147483647;
 
 //-------------------------------------------------------- GRANULAR SAMPLING ---
-/*
-read sample sequences off subsequent buffer memory chunks, and envelopes the
-signal chunk with a pseudo-Gaussian envelope curve; the particular
-implementation should allow for time-stretching (slower memory pointer
-increments at grain level), as well as for "grain density" controls and
-slight random deviations ("jitter") on grain parameters; no frequency shift
-necessary
-Granular Sampling -
-version with - Overlap Add To One - Granulator
-for:
-Agostino Di Scipio - AUDIBLE ECOSYSTEMICS
-n.2a / Feedback Study (2003)
-n.2b / Feedback Study, sound installation (2004).
-- mem.pointer is the pointer to the next location in the memory
-    buffer; in the present notation, it varies between -1 (beginning
-    of buffer) and 1 (end of buffer)
-- mem.pointer : timeIndex1 - a signal between -1 and -0.5
-- mem.pointer.jitter is a random deviation of the current
-    mem.pointer value; any viable method can be used to
-    calculate the current actual value of mem.pointer
-- mem.pointer.jitter: (1 - memWriteDel1) / 100
-- memWriteDel1 = a signal between 0 and 1
-- grain.duration: 0.023 + ((1 - memWriteDel1) / 21) s
-- grain.dur.jitter is a random deviation of the current
-    grain.duration value: the current actual grain duration =
-    grain.duration + (rnd ⋅ grain.dur.jitter(0.1) ⋅ grain.duration)
-- with rnd = random value in the interval [-1, 1]
-- grain.dur.jitter: 0.1 - constant value
-- density: cntrlLev: a signal between 0 and 1 (1 max, 0 no grains)
-*/
-
-
-/*
-declare name "granular_sampling for AUDIBLE ECOSYSTEMICS n.2";
-declare author "Luca Spanedda";
-declare author "Dario Sanfilippo";
-declare version "alpha";
-declare description "Realised on composer's instructions 
-of the year 2017 edited in L’Aquila, Italy";
-*/
 grain(seed,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
 hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
     with{
@@ -703,6 +853,24 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
 
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-    par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
+    par(i, voices, grain(   i,
+                            var1,
+                            timeIndex,
+                            memWriteDel,
+                            cntrlLev,
+                            divDur,
+                            (x/voices)
+                        )
+        );
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
+    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x/nVoices) :> _ ;
+
+// TEST
+// position
+timeIndexG = hslider("timeIndexG", 0, -1, 1, .001); 
+// position jitter
+memWriteDelG = hslider("memWriteDelG", 0, 0, 1, .001);
+// duration
+cntrLevG = hslider("cntrLevG", 0, 0, 1, .001);
+//process = os.osc(1000) : 
+    //granular_sampling(10,var1,timeIndexG,memWriteDelG,cntrLevG,21);
