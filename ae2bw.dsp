@@ -39,6 +39,7 @@ Mic3G = ( hslider("Mic 3", 1,0,1,.001) : si.smoo );
 Mic4G = ( hslider("Mic 4", 1,0,1,.001) : si.smoo );
 
 // Audible Ecosystemics 2
+
 process =  _,_ :
                 \(M1,M2).( M1 * Mic1G, M2 * Mic2G, M1 * Mic3G, M2 * Mic4G ) :
                                         (
@@ -54,7 +55,6 @@ process =  _,_ :
                                                             si.block(2),
                                                             si.bus(2),
                                                             si.block(28);
-
 
                                                             // Granulator outs
                                                             /*
@@ -138,9 +138,8 @@ signalflow1b(
     with{
         cntrlMic(x) =
             x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,.9) : LPButterworthN(5, .5) : 
+                integrator(.01) : delayfb(.01,.999) : LPButterworthN(5, .5) : 
                 limit(1,0);
-                // delayfb(.01,.999) too much: block .9 better
         cntrlMic1 = mic1 : cntrlMic;
         cntrlMic2 = mic2 : cntrlMic;
         directLevel =
@@ -305,8 +304,11 @@ signalflow3 (
 //-------  --------
 
 //----------------------------------------------------------------- CONSTANTS --
+
+// limit function for library and system
+limit(maxl,minl,x) = x : max(minl, min(maxl));
 // var 4 and 1 max comparation (max in out)
-varMax = max(var1,var4);
+varMax = max(var1 * 2, var4 * 2);
 
 // Prime Numbers List
 primes =
@@ -409,15 +411,11 @@ primes =
 10433, 10453, 10457, 10459, 10463, 10477, 10487, 10499, 10501, 10513, 10529,
 10531, 10559, 10567, 10589, 10597, 10601, 10607, 10613, 10627, 10631, 10639,
 10651, 10657, 10663, 10667);
-
 // index of the primes numbers
 primeNumbers(index) = ba.take(index , list)
   with{
     list = primes;
 };
-
-// limit function
-limit(maxl,minl,x) = x : max(minl, min(maxl));
 
 //---------------------------------------------------------------- SAMPLEREAD --
 /*
@@ -434,14 +432,19 @@ it.frwtable(  tabInt, 192000 * (memBuffer), .0,
               ba.period(memBuffer * ma.SR), x, rIdx )
     with {
     //clip the smallest chunk
-    memChunk(maxChunk) = (maxChunk  : max(0.001, min(1))) * memBuffer * ma.SR;
+    memChunk(maxChunk) = ( limit(1,.001,maxChunk) ) * memBuffer * ma.SR;
     rIdx =  os.phasor(memChunk(maxChunk), 
             (ma.SR / memChunk  (maxChunk)) * ratio);
     };
+// TEST
+//process = sampler(1, -1, 1);
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
-delayfb(del,fb) = (+ : de.delay(varMax * 2, ba.sec2samp(del) ))~ _ * (fb);
+delayfb(seconds,fb,w) = w : (+ : de.delay(varMax, ba.sec2samp(seconds) ))~
+                                                                         * (fb);
+// TEST
+// process = no.noise : delayfb(-1,.2);
 
 //--------------------------------------------------------------- INTEGRATOR ---
 // returns the average absolute value over a specific time frame
@@ -451,10 +454,10 @@ movingAverage(seconds, x) = x - (x @ N) : fi.pole(1.0) / N
     with {
         N = seconds * ma.SR;
     };
-
 RMSRectangular(seconds, x) = sqrt(max(0, movingAverage(seconds, x * x)));
-
-integrator(seconds, x) = RMSRectangular(seconds, x);
+integrator(seconds, x) = RMSRectangular(limit(1000,.001,seconds), x);
+// TEST
+//process = (-100, no.noise) : integrator;
 
 //----------------------------------------------------------------- LOCALMAX ---
 // returns the maximum signal amplitude (absolute value) in a given time frame;
@@ -491,7 +494,6 @@ triangleWave(f) = triangularFunc(os.phasor(1,f));
 // TPT version of the One Pole and SVF Filter by Vadim Zavalishin
 // reference : (by Will Pirkle)
 // http://www.willpirkle.com/Downloads/AN-4VirtualAnalogFilters.2.0.pdf
-
 // OnePoleTPT filter function
 onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
     with {
@@ -506,8 +508,10 @@ onePoleTPT(cf, x) = loop ~ _ : ! , si.bus(3)
                 ap = lp - hp;
             };
     };
-LPTPT(cf, x) = onePoleTPT(cf, x) : (_ , ! , !);
-HPTPT(cf, x) = onePoleTPT(cf, x) : (! , _ , !);
+LPTPT(cf, x) = onePoleTPT(limit(20000,1.19209e-07,cf), x) : (_ , ! , !);
+HPTPT(cf, x) = onePoleTPT(limit(20000,1.19209e-07,cf), x) : (! , _ , !);
+// TEST
+// process = (-100, no.noise) : HPTPT;
 
 // SVFTPT filter function
 SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
@@ -537,23 +541,29 @@ SVFTPT(K, Q, CF, x) = circuitout : !,!,_,_,_,_,_,_,_,_
     };
 // Outs = (lp , hp , bp, notch, apf, ubp, peak, bshelf)
 // SVFTPT(K, Q, CF, x) = (Filter-K, Filter-Q, Frequency Cut)
-
 // Filters Bank
-LPSVF(Q, CF, x) =   SVFTPT(0, Q, CF, x) : _,!,!,!,!,!,!,!;
-HPSVF(Q, CF, x) =   SVFTPT(0, Q, CF, x) : !,_,!,!,!,!,!,!;
-/*
-BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, Q, CF, x )   : !,!,_,!,!,!,!,!
+LPSVF(Q, CF, x) = SVFTPT(0, Q, 
+                            limit(20000,1.19209e-07,CF), x) : _,!,!,!,!,!,!,!;
+HPSVF(Q, CF, x) = SVFTPT(0, Q, 
+                            limit(20000,1.19209e-07,CF), x) : !,_,!,!,!,!,!,!;
+//process = (-1, -10000, no.noise) <: LPSVF, HPSVF;
+BPsvftpt(BW, CF, x) = SVFTPT(0 : ba.db2linear, ql, cfl, x )   : !,!,!,!,!,_,!,!
     with{
-        Q = CF / BW;
+        cfl = limit(20000,1.19209e-07,CF);
+        bwl = limit(20000,1.19209e-07,BW);
+        ql  = cfl / bwl;
         };
-*/
+// TEST
+//process = (1, 1000, no.noise) : BPsvftpt;
+/*
 BPsvftpt(bw, fc, x) =   x : fi.bandpass(1,    
                                 fcn(fc,bw)-(bw/2) : max(1, min(20000)),
                                 fcn(fc,bw)+(bw/2) : max(1, min(20000)))
                                     with{
                                         fcn(fc,bw) = fc : max(bw/2);
                                         };
-                                        
+*/          
+
 // Butterworth
 butterworthQ(order, stage) = qFactor(order % 2)
     with {
@@ -569,7 +579,6 @@ LPButterworthN(N, cf, x) = cascade(N % 2)
         cascade(1) = x : LPTPT(cf) : seq(i, (N - 1) / 2,
         LPSVF(butterworthQ(N, i), cf));
     };
-
 HPButterworthN(1, cf, x) = HPTPT(cf, x);
 HPButterworthN(N, cf, x) = cascade(N % 2)
     with {
@@ -577,7 +586,8 @@ HPButterworthN(N, cf, x) = cascade(N % 2)
         cascade(1) = x : HPTPT(cf) : seq(i, (N - 1) /
         2, HPSVF(butterworthQ(N, i), cf));
     };
-
+//process =   HPButterworthN(10, -1000, no.noise), 
+        //    LPButterworthN(10, -1000, no.noise);
 //------------------------------------------------------------------------ NOISE
 // noise generated with prime numbers and index
 noise(seed) = (+(primeNumbers(seed + 1)) ~ *(1103515245)) / 2147483647;
@@ -693,6 +703,6 @@ hann(readingSegment) * buffer(bufferSize, readPtr, x) : vdelay
 
 // par (how much grains/instances do you want?)
 grainN(voices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
+    par(i, voices, grain(i,var1,timeIndex,memWriteDel,cntrlLev,divDur,(x/voices)));
 granular_sampling(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) =
-grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
+    grainN(nVoices,var1,timeIndex,memWriteDel,cntrlLev,divDur,x) :> _ ;
