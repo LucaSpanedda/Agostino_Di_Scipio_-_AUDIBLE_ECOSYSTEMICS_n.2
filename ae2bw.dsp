@@ -68,12 +68,12 @@ signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                         delayfb(0.01,0.995) : LPButterworthN(5, 25.0) : 
                         \(x).(.5 + x * .5) : 
                 // LIMIT - max - min
-                limit(1, -1) :
+                limit(100, 0) :
                 // INSPECTOR 
                 _ <: _ ,  
                 (   SAH2(inspectorTime) : 
                     hgroup("signal_flow_1a",
-                        vbargraph("[1] diffHL [style:numerical]", -1, 1)
+                        vbargraph("[1] diffHL [style:numerical]", 0, 100)
                     )
                 ) : attach;
         memWriteLev =
