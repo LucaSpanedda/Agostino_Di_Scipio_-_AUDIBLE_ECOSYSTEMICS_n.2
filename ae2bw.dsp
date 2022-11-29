@@ -33,7 +33,7 @@ var4 =  distance (in meters) between the two farthest removed loudspeakers
 */
 
 // Audible Ecosystemics 2
-process =  _,_@(ma.SR/4) : \(M1,M2).( M1, M2, M1, M2 ) :
+process =  _,_ : \(M1,M2).( M1, M2, M1, M2 ) :
                                         (
                                           signalflow1a
                                         : signalflow1b
