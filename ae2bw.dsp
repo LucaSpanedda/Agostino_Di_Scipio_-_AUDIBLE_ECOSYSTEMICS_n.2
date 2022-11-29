@@ -19,7 +19,7 @@ var3 = .2;
 var4 = 1;
 tabInt = 1; // tables interpolation order (Lagrange)
 grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
-inspectorTime = .01;
+inspectorTime = .1; // time for the GUI inspectors
 /*
 var1 =  distance (in meters) between the two farthest removed loudspeakers 
         on the left-right axis.
@@ -33,7 +33,7 @@ var4 =  distance (in meters) between the two farthest removed loudspeakers
 */
 
 // Audible Ecosystemics 2
-process =  _,_ : \(M1,M2).( M1, M2, M1, M2 ) :
+process =  _,_@(ma.SR/4) : \(M1,M2).( M1, M2, M1, M2 ) :
                                         (
                                           signalflow1a
                                         : signalflow1b
@@ -60,11 +60,25 @@ signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                     \(x,y).(x-y);
         SenstoExt =
             (outFromSixPlusSixTimesX, localMaxDiff) : localmax
-                <: _ , @(ba.sec2samp(12)) : + : * (.5) : LPButterworthN(1, .5);
+                <: _ , @(ba.sec2samp(12)) : + : * (.5) : LPButterworthN(1, .5) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("in-system",
+                        vbargraph("[1] SenstoExt [style:numerical]", 0, 100)
+                    )
+                ) : attach;
         diffHL =
             ((mic3 + mic4) : HPButterworthN(3, var2) : integrator(.05)) ,
                 ((mic3 + mic4) : LPButterworthN(3, var2) : integrator(.10)) :
                     \(x,y).(x-y) * (1 - SenstoExt) :
+                // INSPECTOR 
+                _ <: _ ,  
+                (   SAH2(inspectorTime) : 
+                    hgroup("in-system",
+                        vbargraph("[1] Mic3-Mic4[style:numerical]", 0, 100)
+                    )
+                ) : attach :
                         delayfb(0.01,0.995) : LPButterworthN(5, 25.0) : 
                         \(x).(.5 + x * .5) : 
                 // LIMIT - max - min
@@ -663,6 +677,7 @@ peakHolder(secondsPeriod, x) = y
         };
 */
 // holdTime in Seconds
+/*
 peakHolder(holdTime, x) = loop ~ si.bus(2) : ! , _
     with {
         loop(timerState, outState) = timer , output
@@ -674,7 +689,19 @@ peakHolder(holdTime, x) = loop ~ si.bus(2) : ! , _
                 output = ba.if(bypass, abs(x), outState);
             };
     };
-localmax(resetPeriod, x) = peakHolder(resetPeriod, x);
+*/
+localmaxsah(seconds, y) = y : loop : sah
+with{
+    loop(x) = \(FB).((FB , abs(x)) : max)~ * (1-trig');
+    sah(x) = \(FB).( selector(trig, FB, x) )~ _
+        with{
+            selector(sel,x,y) = ( x * (1-sel) + y * (sel) );
+        };
+    ph = os.phasor(1, 1/seconds);
+    trig = ph < ph';
+    };
+//process = os.osc(.1245) : localmax(1);
+localmax(resetPeriod, x) = localmaxsah(limit(1000,.001,resetPeriod), x);
 
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
@@ -874,3 +901,60 @@ memWriteDelG = hslider("memWriteDelG", 0, 0, 1, .001);
 cntrLevG = hslider("cntrLevG", 0, 0, 1, .001);
 //process = os.osc(1000) : 
     //granular_sampling(10,var1,timeIndexG,memWriteDelG,cntrLevG,21);
+
+
+/*
+L = 10;
+grain(L, position, duration, x, trigger) = hann(phase) * buffer(readPtr, x)
+    with {
+        maxLength = 1920000;
+        length = L * ma.SR;
+        hann(ph) = sin(ma.PI * ph) ^ 2.0;
+        lineSegment = loop ~ si.bus(2) : _ , ! , _
+            with {
+                loop(yState, incrementState) = y , increment , ready
+                    with {
+                        ready = ((yState == 0.0) | (yState == 1.0)) & trigger;
+                        y = ba.if(ready, increment, min(1.0, yState + increment));
+                        increment = ba.if(ready, ma.T / max(ma.T, duration), incrementState);
+                    };
+            };
+        phase = lineSegment : _ , !;
+        unlocking = lineSegment : ! , _;
+        lock(param) = ba.sAndH(unlocking, param);   
+        grainPosition = lock(position);
+        grainWarp = lock(warp);
+        grainDuration = lock(duration);
+        readPtr = grainPosition * length + phase * grainDuration * ma.SR;
+        buffer(readPtr, x) = it.frwtable(3, maxLength, .0, writePtr, x, readPtrWrapped)
+            with {
+                writePtr = ba.period(length);
+                readPtrWrapped = ma.modulo(readPtr, length);
+            };
+    };
+
+// works for N >= 2
+triggerArray(N, rate) = loop ~ si.bus(3) : (! , ! , _) <: par(i, N,  == (i)) : par(i, N, \(x).(x > x'))
+    with {
+        loop(incrState, phState, counterState) = incr , ph , counter
+            with {
+                init = 1 - 1';
+                trigger = (phState < phState') + init;
+                incr = ba.if(trigger, rate * ma.T, incrState);
+                ph = ma.frac(incr + phState);
+                counter = (trigger + counterState) % N;
+            };
+    };
+grainN(voices, position, rate, duration, x) = triggerArray(voices, rate) : par(i, voices, grain(L, position, duration, x));
+
+voices = 4;
+x = os.osc(1000);
+
+rnd = (no.noise + 1.0) /  2.0; 
+
+_grainRate = 10 + 1000 * rnd;
+_grainDuration = .01 + .1 * rnd;
+_grainPosition = rnd;
+
+process = grainN(voices, _grainPosition, _grainRate, _grainDuration) :> si.bus(2);
+*/
