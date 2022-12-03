@@ -257,8 +257,7 @@ it.frwtable(  tabInt, 192000 * (memBuffer), .0,
 
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
-delayfb(seconds,fb,w) = w : (+ : de.delay(varMax, ba.sec2samp(seconds) ))~
-                                                                         * (fb);
+delayfb(seconds,fb,x) = x:(+ : de.delay(varMax, ba.sec2samp(seconds)-1 ))~*(fb);
 // TEST
 // process = no.noise : delayfb(-1,.2);
 
@@ -302,18 +301,45 @@ peakHolder(holdTime, x) = loop ~ si.bus(2) : ! , _
             };
     };
 */
-localmaxsah(seconds, y) = y : loop : sah
+/*
+localmax(seconds, y) = y : loop : sah
 with{
-    loop(x) = \(FB).((FB , abs(x)) : max)~ * (1-trig');
-    sah(x) = \(FB).( selector(trig, FB, x) )~ _
+    loop(x) = \(FB).((FB , abs(x)) : max)~ * (1-trig);
+    sah(x) = \(FB).( selector(trig, FB, x') )~ _
         with{
             selector(sel,x,y) = ( x * (1-sel) + y * (sel) );
         };
     ph = os.phasor(1, 1/seconds);
     trig = ph < ph';
     };
+
+localMax(seconds, x) = loop ~ si.bus(3) : _ , ! , !
+    with {
+        loop(yState, timerState, peakState) = y , timer , peak
+            with {
+                timeInSamples = seconds * ma.SR;
+                reset = timerState >= (timeInSamples - 1);
+                timer = ba.if(reset, 1, timerState + 1);
+                peak = max(abs(x), peakState * (1.0 - reset));
+                y = ba.if(reset, peak', yState);
+            };
+    };
+
+process = os.osc(.1234) : localMax(1);
+*/
+localmaxpre(seconds, x) = loop ~ si.bus(3) : _ , ! , !
+    with {
+        loop(yState, timerState, peakState) = y , timer , peak
+            with {
+                timeInSamples = seconds * ma.SR;
+                reset = timerState >= (timeInSamples - 1);
+                timer = ba.if(reset, 1, timerState + 1);
+                peak = max(abs(x), peakState * (1.0 - reset));
+                y = ba.if(reset, peak', yState);
+            };
+    };
 //process = os.osc(.1245) : localmax(1);
-localmax(resetPeriod, x) = localmaxsah(limit(1000,.001,resetPeriod), x);
+localmax(resetPeriod, x) = localmaxpre(limit(1000,.001,resetPeriod), x);
 
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
