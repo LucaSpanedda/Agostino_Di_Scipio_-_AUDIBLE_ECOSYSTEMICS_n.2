@@ -226,7 +226,7 @@ signalflow1b(
     with{
         cntrlMic(x) =
             x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,.999) : LPButterworthN(5, .5);
+                integrator(.01) : delayfb(.01,.995) : LPButterworthN(5, .5);
         cntrlMic1 = mic1 : cntrlMic : 
         // LIMIT - max - min
         limit(1, 0) :
@@ -708,7 +708,7 @@ movingAverage(seconds, x) = x - (x @ N) : fi.pole(1.0) / N
         N = seconds * ma.SR;
     };
 RMSRectangular(seconds, x) = sqrt(max(0, movingAverage(seconds, x * x)));
-integrator(seconds, x) = RMSRectangular(limit(1000,.001,seconds), x);
+integrator(seconds, x) = an.abs_envelope_tau(limit(1000,.001,seconds), x);
 // TEST
 //process = (-100, no.noise) : integrator;
 
@@ -765,19 +765,19 @@ localMax(seconds, x) = loop ~ si.bus(3) : _ , ! , !
 
 process = os.osc(.1234) : localMax(1);
 */
-localmaxpre(seconds, x) = loop ~ si.bus(3) : _ , ! , !
+localMax(seconds, x) = loop ~ si.bus(4) : _ , ! , ! , !
     with {
-        loop(yState, timerState, peakState) = y , timer , peak
+        loop(yState, timerState, peakState, timeInSamplesState) = y , timer , peak , timeInSamples
             with {
-                timeInSamples = seconds * ma.SR;
-                reset = timerState >= (timeInSamples - 1);
+                timeInSamples = ba.if(reset + 1 - 1', seconds * ma.SR, timeInSamplesState);
+                reset = timerState >= (timeInSamplesState - 1);
                 timer = ba.if(reset, 1, timerState + 1);
                 peak = max(abs(x), peakState * (1.0 - reset));
                 y = ba.if(reset, peak', yState);
             };
     };
-//process = os.osc(.1245) : localmax(1);
-localmax(resetPeriod, x) = localmaxpre(limit(1000,.001,resetPeriod), x);
+//process = os.osc(.1245) : localMax(1);
+localmax(resetPeriod, x) = localMax(limit(1000,.001,resetPeriod), x);
 
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
