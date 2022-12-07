@@ -12,14 +12,15 @@ import("stdfaust.lib");
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 
-// Variables that are to be initialized prior to performance
-var1 = 1;
+// PERFORMANCE SYSTEM VARIABLES
+var1 = 20;
 var2 = 2000;
-var3 = .2;
-var4 = 1;
+var3 = 0.5;
+var4 = 20;
 tabInt = 1; // tables interpolation order (Lagrange)
-grainsPAR = 8; // parallel granulator Instances (for 2 granulators)
+grainsPAR = 8; // parallel granulator Instances (N for each of the 2 granulators)
 inspectorTime = .1; // time for the GUI inspectors
+
 /*
 var1 =  distance (in meters) between the two farthest removed loudspeakers 
         on the left-right axis.
