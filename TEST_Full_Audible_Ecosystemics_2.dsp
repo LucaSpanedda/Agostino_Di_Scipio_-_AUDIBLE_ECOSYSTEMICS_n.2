@@ -217,7 +217,7 @@ signalflow1b(
     with{
         cntrlMic(x) =
             x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,.995) : LPButterworthN(5, .5);
+                integrator(.01) : delayfb(.01,.8) : LPButterworthN(5, .5);
         cntrlMic1 = mic1 : cntrlMic : 
         // LIMIT - max - min
         limit(1, 0) :
@@ -474,7 +474,7 @@ signalflow2b(
                          ( sig6 : @(ba.sec2samp(.036)) * (1 - triangle3) ),
                                ( sig6 : @(ba.sec2samp(.036)) * triangle3 ),
                                                                       sig1,
-                                                                      sig2,
+                                                                         0,
                                                                       sig4,
                     grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev
                 ) :> + : 
