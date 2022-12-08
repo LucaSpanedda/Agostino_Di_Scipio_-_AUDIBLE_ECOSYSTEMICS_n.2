@@ -50,7 +50,7 @@ sololarsen(mic1, mic2, mic3, mic4) = sig1, sig2
                 ) : attach;
         cntrlMic(x) =
             x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,.999) : LPButterworthN(5, .5);
+                integrator(.01) : delayfb(.01,.8) : LPButterworthN(5, .5);
         cntrlMic1 = mic1 : cntrlMic : 
         // LIMIT - max - min
         limit(1, 0) :
