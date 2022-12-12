@@ -43,7 +43,7 @@ TestList1(i) =      ba.take(i, frequencies_list),
 // TEST 2
 //process = TestList1(6) : SineTest <: ( _, _, _, 0 ) :
 // TEST 1
-process = TestList1(1) : SineTest <:
+process = TestList1(6) : SineTest <:
                                         (
                                           signalflow1a
                                         : signalflow1b
@@ -483,7 +483,7 @@ signalflow2b(
                          ( sig6 : @(ba.sec2samp(.036)) * (1 - triangle3) ),
                                ( sig6 : @(ba.sec2samp(.036)) * triangle3 ),
                                                                       sig1,
-                                                                      sig2,
+                                                                         0,
                                                                       sig4,
                     grainOut1 * (1 - memWriteLev) + grainOut2 * memWriteLev
                 ) :> + : 
