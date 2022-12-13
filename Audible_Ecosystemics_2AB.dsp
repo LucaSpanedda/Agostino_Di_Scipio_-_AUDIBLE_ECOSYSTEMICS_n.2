@@ -12,6 +12,7 @@ import("stdfaust.lib");
 //-------  --------
 
 // PERFORMANCE SYSTEM VARIABLES
+SampleRate = 44100;
 var1 = 20;
 var2 = 2000;
 var3 = 0.5;
@@ -19,7 +20,6 @@ var4 = 20;
 tabInt = 1; // tables interpolation order (Lagrange)
 grainsPAR = 8; // parallel granulator Instances (N for each of the 2 granulators)
 inspectorTime = .001; // time for the GUI inspectors
-
 // EDIT IN SYSTEM
 cntrlMicFB = 0.800;
 
@@ -685,6 +685,7 @@ it.frwtable(tabInt, 192000 * (var1), .0, ba.period(memSeconds * ma.SR), x, rIdx)
         rIdx = os.phasor(readingLength, readingRate * si.smoo(ratio));
     };
 */
+/*
 sampler(memBuffer, maxChunk, ratio, x) =
 it.frwtable(  tabInt, 192000 * (memBuffer), .0, 
               ba.period(memBuffer * ma.SR), x, rIdx )
@@ -696,7 +697,36 @@ it.frwtable(  tabInt, 192000 * (memBuffer), .0,
     };
 // TEST
 //process = sampler(1, -1, 1);
-
+*/
+sampler(bufferLength, memChunk, ratio, x) = y
+    with {
+        y = it.frwtable(3, L, .0, writePtr, x, readPtr * memChunkLock * L) * trapezoidal(.95, readPtr)
+            with {
+                L = bufferLength * SampleRate; // hard-coded: change this to match your samplerate
+                writePtr = ba.period(L);
+                readPtr = phasor : _ , !;
+                memChunkLock = phasor : ! , _;
+                phasor = loop ~ si.bus(3) : _ , ! , _
+                    with {
+                        loop(phState, incrState, chunkLenState) = ph , incr , chunkLen
+                            with {
+                                ph = ba.if(phState < 1.0, phState + incrState, 0.0);
+                                unlock = phState < phState' + 1 - 1';
+                                incr = ba.if(   unlock, 
+                                                ma.T * max(.1, min(10.0, ratio)) / 
+                                                    max(ma.T, (memChunk * bufferLength)), 
+                                                incrState);
+                                chunkLen = ba.if(unlock, memChunk, chunkLenState);
+                            };
+                    };
+                trapezoidal(width, ph) = 
+                    min(1.0, 
+                        abs(ma.decimal(ph + .5) * 2.0 - 1.0) / 
+                            max(ma.EPSILON, 1.0 - width));
+            };
+    };
+//process = sampleRead(   1, hslider("chnk",0,0,1,.001), 
+                        //hslider("rati",1,0,2,.001), os.osc(200)) <: _,_;
 //-------------------------------------------------------------------- DELAY ---
 // FB delay line - w min and max
 delayfb(seconds,fb,x) = x:(+ : de.delay(varMax, ba.sec2samp(seconds)-1 ))~*(fb);
@@ -782,8 +812,8 @@ localMax(seconds, x) = loop ~ si.bus(4) : _ , ! , ! , !
                 y = ba.if(reset, peak', yState);
             };
     };
-//process = os.osc(.1245) : localMax(1);
-localmax(resetPeriod, x) = localMax(limit(1000,.001,resetPeriod), x);
+//process = os.osc(.1245) : localMax(hslider("windowlocalM",-1,-1,8,.001));
+localmax(resetPeriod, x) = localMax(limit(1000,0,resetPeriod), x);
 
 //----------------------------------------------------------------- TRIANGLE ---
 triangularFunc(x) = abs(ma.frac((x - .5)) * 2.0 - 1.0);
