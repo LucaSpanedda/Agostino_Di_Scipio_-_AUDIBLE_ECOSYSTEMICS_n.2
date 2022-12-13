@@ -107,7 +107,7 @@ signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                 limit(20000, 0);
         memWriteLev =
             (mic3 + mic4) : integrator(.1) : delayfb(.01,.9) :
-                LPButterworthN(5, 25) : \(x).(1 - (x * x)) : 
+                LPButterworthN(5, 25) :\(x).(1 - (inspect(100, -10, 10, x * x))) : 
                 // LIMIT - max - min
                 limit(1, 0);
         memWriteDel1 = memWriteLev : @(ba.sec2samp(var1 / 2)) : 
@@ -361,6 +361,7 @@ inspect(i, lower, upper) =
     _ <:    _ , 
             vbargraph("sig_%2i [style:numerical]", lower, upper) : attach;
 //process = (os.osc(.01) : inspect(1, .1, -1, 1));
+diffDebug(x) = an.abs_envelope_tau(1, (x-x')) * (SampleRate/2);
 // var 4 and 1 max comparation (max in out)
 varMax = max(var1 * 2, var4 * 2);
 
@@ -500,7 +501,7 @@ sampler(bufferLength, memChunk, ratio, x) = y
     with {
         y = it.frwtable(3, L, .0, writePtr, x, readPtr * memChunkLock * L) * trapezoidal(.95, readPtr)
             with {
-                memChunkLimited = limit(1, .010, memChunk);
+                memChunkLimited = limit(.900, .100, memChunk);
                 L = bufferLength * SampleRate; // hard-coded: change this to match your samplerate
                 writePtr = ba.period(L);
                 readPtr = phasor : _ , !;
