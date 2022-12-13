@@ -7,7 +7,6 @@ of the year 2017 edited in L’Aquila, Italy";
 // import faust standard library
 import("stdfaust.lib");
 
-
 //-------  -------------   -----  -----------
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
@@ -19,22 +18,36 @@ var3 = 0.5;
 var4 = 20;
 tabInt = 1; // tables interpolation order (Lagrange)
 grainsPAR = 8; // parallel granulator Instances (N for each of the 2 granulators)
-inspectorTime = .1; // time for the GUI inspectors
+inspectorTime = .001; // time for the GUI inspectors
 
-/*
-var1 =  distance (in meters) between the two farthest removed loudspeakers 
-        on the left-right axis.
-var2 =  rough estimate of the center frequency in the spectrum of the room’s 
-        background noise (spectral centroid): to evaluate at rehearsal time, 
-        in a situation of "silence".
-var3 =  subjective estimate of how the room revereberance, 
-        valued between 0 ("no reverb") and 1 (“very long reverb”).
-var4 =  distance (in meters) between the two farthest removed loudspeakers 
-        on the front-rear axis.
-*/
+// EDIT IN SYSTEM
+cntrlMicFB = 0.800;
 
-// Audible Ecosystemics 2
-process =  _,_ : \(M1,M2).( M1, M2, M1, M2 ) :
+
+SystemTEST =    
+    ( TestList1(1) : SineTest * checkbox("Sine to all MICS") <: si.bus(4) ),
+    ( TestList1(1) : SineTest * checkbox("Sine to MICS 1/2/3") <: si.bus(3),0 ),
+    ( si.bus(2) <: par(i, 4, _*checkbox("MICS 1/2 to 1+3/2+4")) ) :> si.bus(4)
+with {
+    // TEST WITH SINE SIGNAL
+    SineTest(freq,dB,sec) = signal
+    with {
+        amp = ba.db2linear(dB);
+        duration = 1 - 1@(ma.SR * sec);
+        signal = os.osc(freq) * amp * duration;
+        };
+    TestList1(i) =      ba.take(i, frequencies_list), 
+                        ba.take(i, dB_list),
+                        ba.take(i, seconds_list)
+    with {
+        // Sin in Column : 1     2     3     4     5     6     7    8    9
+        frequencies_list = 1000, 1000, 1000, 3000, 3000, 3000, 500, 500, 500;
+        dB_list =          -18,  -18,  -18,  -18,  -18,  -18,  -18, -18, -18;
+        seconds_list =     2,    5,    10,   2,    5,    10,   2,   5,   10;
+        };
+    };
+// process =    SystemTEST;
+process =       SystemTEST :
                                         (
                                           signalflow1a
                                         : signalflow1b
@@ -217,7 +230,7 @@ signalflow1b(
     with{
         cntrlMic(x) =
             x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,.8) : LPButterworthN(5, .5);
+                integrator(.01) : delayfb(.01,cntrlMicFB) : LPButterworthN(5, .5);
         cntrlMic1 = mic1 : cntrlMic : 
         // LIMIT - max - min
         limit(1, 0) :
@@ -694,11 +707,13 @@ delayfb(seconds,fb,x) = x:(+ : de.delay(varMax, ba.sec2samp(seconds)-1 ))~*(fb);
 // returns the average absolute value over a specific time frame
 // (one may use RMS measures, instead, or other amplitude-following methods);
 // output range is [0, 1]
+/*
 movingAverage(seconds, x) = x - (x @ N) : fi.pole(1.0) / N
     with {
         N = seconds * ma.SR;
     };
 RMSRectangular(seconds, x) = sqrt(max(0, movingAverage(seconds, x * x)));
+*/
 integrator(seconds, x) = an.abs_envelope_tau(limit(1000,.001,seconds), x);
 // TEST
 //process = (-100, no.noise) : integrator;
