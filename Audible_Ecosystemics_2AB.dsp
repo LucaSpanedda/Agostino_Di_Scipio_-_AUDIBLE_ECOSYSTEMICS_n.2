@@ -500,6 +500,7 @@ sampler(bufferLength, memChunk, ratio, x) = y
     with {
         y = it.frwtable(3, L, .0, writePtr, x, readPtr * memChunkLock * L) * trapezoidal(.95, readPtr)
             with {
+                memChunkLimited = limit(1, .010, memChunk);
                 L = bufferLength * SampleRate; // hard-coded: change this to match your samplerate
                 writePtr = ba.period(L);
                 readPtr = phasor : _ , !;
@@ -512,9 +513,9 @@ sampler(bufferLength, memChunk, ratio, x) = y
                                 unlock = phState < phState' + 1 - 1';
                                 incr = ba.if(   unlock, 
                                                 ma.T * max(.1, min(10.0, ratio)) / 
-                                                    max(ma.T, (memChunk * bufferLength)), 
+                                                    max(ma.T, (memChunkLimited * bufferLength)), 
                                                 incrState);
-                                chunkLen = ba.if(unlock, memChunk, chunkLenState);
+                                chunkLen = ba.if(unlock, memChunkLimited, chunkLenState);
                             };
                     };
                 trapezoidal(width, ph) = 
