@@ -7,12 +7,13 @@ of the year 2017 edited in L’Aquila, Italy";
 // import faust standard library
 import("stdfaust.lib");
 
+
 //-------  -------------   -----  -----------
 //-- AE2 -----------------------------------------------------------------------
 //-------  --------
 
 // PERFORMANCE SYSTEM VARIABLES
-SampleRate = 96000;
+SampleRate = 44100;
 var1 = 20;
 var2 = 2000;
 var3 = 0.5;
@@ -21,21 +22,36 @@ grainsPAR = 8; // parallel granulator Instances (N for each of the 2 granulators
 // EDIT IN SYSTEM
 cntrlMicFB = 0.800;
 
+
+// TEST with Sinusoids
+// Sin in Column :    1     2     3     4     5     6     7    8    9
+// frequencies_list = 1000, 1000, 1000, 3000, 3000, 3000, 500, 500, 500;
+// dB_list =          -18,  -18,  -18,  -18,  -18,  -18,  -18, -18, -18;
+// seconds_list =     2,    5,    10,   2,    5,    10,   2,   5,   10;
+SinTestN = 1; // CHOOSE TEST from LIST
+SineInit = 0; // Launch Test when is System Compiled/Launched
+SineTestonAllMics = 1; // Test on AllMics 1/ON - 0/OFF
+SineTestonMics123 = 0; // Test on Mics123 1/ON - 0/OFF
+
+
 SystemTEST =    
-    ( TestList1(1) : SineTest * checkbox("Sine to all MICS") <: si.bus(4) ),
-    ( TestList1(1) : SineTest * checkbox("Sine to MICS 1/2/3") <: si.bus(3),0 ),
-    ( si.bus(2) <: par(i, 4, _*checkbox("MICS 1/2 to 1+3/2+4")) ) :> si.bus(4)
+    ( TestList1(SinTestN) : SineTest * SineTestonAllMics <: si.bus(4)   ),
+    ( TestList1(SinTestN) : SineTest * SineTestonMics123 <: si.bus(3),0 ),
+    ( si.bus(2) <: par(i, 4, _ * ButtonMICSto13and24) ) :> si.bus(4)
 with {
+    ButtonSintoMICS = checkbox("Sine to MICS");
+    ButtonMICSto13and24 = checkbox("MICS 1/2 to 1+3/2+4");
     // TEST WITH SINE SIGNAL
-    SineTest(freq,dB,sec) = signal
+    SineTest(freq, dB, sec, trigger) = signal
     with {
         amp = ba.db2linear(dB);
-        duration = 1 - 1@(ma.SR * sec);
+        duration = (trigger - trigger@(ma.SR * sec)) > 0;
         signal = os.osc(freq) * amp * duration;
         };
     TestList1(i) =      ba.take(i, frequencies_list), 
                         ba.take(i, dB_list),
-                        ba.take(i, seconds_list)
+                        ba.take(i, seconds_list),
+                        ButtonSintoMICS + SineInit
     with {
         // Sin in Column : 1     2     3     4     5     6     7    8    9
         frequencies_list = 1000, 1000, 1000, 3000, 3000, 3000, 500, 500, 500;
@@ -45,8 +61,8 @@ with {
     };
 // process =    SystemTEST;
 
-//
 
+// MAIN SYSTEM FUNCTION
 process = 
     SystemTEST : 
     (   
@@ -79,8 +95,8 @@ process =
     //( si.block(28), si.bus(8) ): 
     //par(i, 8, hgroup("Signal Flow 2a", inspect(i,-1,1)));
 
-//
 
+// SYSTEM SIGNALS FLOW FUNCTIONS
 signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                             grainOut1, grainOut2, mic1, mic2, mic3, mic4,
                             diffHL, memWriteDel1, memWriteDel2, memWriteLev,
