@@ -4,6 +4,7 @@ declare version "alpha";
 declare description " 2022 version - Realised on composer's instructions
 of the year 2017 edited in L’Aquila, Italy";
 
+
 // import faust standard library
 import("stdfaust.lib");
 
@@ -102,50 +103,45 @@ signalflow1a( grainOut1, grainOut2, mic1, mic2, mic3, mic4 ) =
                             diffHL, memWriteDel1, memWriteDel2, memWriteLev,
                             cntrlLev1, cntrlLev2, cntrlFeed, cntrlMain
     with{
-        outFromSixPlusSixTimesX =
-            (mic3 : integrator(.01) : delayfb(.01,.95)) +
-                (mic4 : integrator(.01) : delayfb(.01,.95)) :
+        map6sumx6 = (mic3 : integrator(.01) : delayfb(.01,.95)) +
+                    (mic4 : integrator(.01) : delayfb(.01,.95)) : 
                     \(x).(6 + x * 6);
-        localMaxDiff =
-            ((outFromSixPlusSixTimesX, mic3) : localmax) ,
-                ((outFromSixPlusSixTimesX, mic4) : localmax) :
-                    \(x,y).(x-y);
-        SenstoExt =
-            (outFromSixPlusSixTimesX, localMaxDiff) : localmax
-                <: _ , @(ba.sec2samp(12)) : + : * (.5) : LPButterworthN(1, .5);
-        diffHL =
-            ((mic3 + mic4) : HPButterworthN(3, var2) : integrator(.05)) ,
-                ((mic3 + mic4) : LPButterworthN(3, var2) : integrator(.10)) :
-                    \(x,y).(x-y) * (1 - SenstoExt) :
-                        delayfb(0.01,0.995) : LPButterworthN(5, 25.0) : 
-                        \(x).(.5 + x * .5) : 
-                // LIMIT - max - min
-                limit(20000, 0);
-        memWriteLev =
-            (mic3 + mic4) : integrator(.1) : delayfb(.01,.9) :
-                LPButterworthN(5, 25) :\(x).(1 - (inspect(100, -10, 10, x * x))) : 
-                // LIMIT - max - min
-                limit(1, 0);
-        memWriteDel1 = memWriteLev : @(ba.sec2samp(var1 / 2)) : 
-                // LIMIT - max - min
-                limit(1, 0);
-        memWriteDel2 = memWriteLev : @(ba.sec2samp(var1 / 3)) : 
-                // LIMIT - max - min
-                limit(1, 0);
-        cntrlMain =
-            (mic3 + mic4) * SenstoExt : integrator(.01) :
-                delayfb(.01,.995) : LPButterworthN(5, 25) : 
-                // LIMIT - max - min
-                limit(1, 0);
+        localMaxDiff =  ((map6sumx6, mic3) : localmax) ,
+                        ((map6sumx6, mic4) : localmax) :
+                        \(x,y).(x-y);
+        SenstoExt = (map6sumx6, localMaxDiff) : localmax <: _ , 
+                    @(ba.sec2samp(12)) : + : * (.5) : LPButterworthN(1, .5) ;
+        diffHL = ((mic3 + mic4) : HPButterworthN(3, var2) : integrator(.05)) ,
+                 ((mic3 + mic4) : LPButterworthN(3, var2) : integrator(.10)) :
+                 \(x,y).(x-y) * (1 - SenstoExt) :
+                 delayfb(0.01,0.995) : LPButterworthN(5, 25.0) : 
+                 \(x).(.5 + x * .5) : 
+                 // LIMIT - max - min
+                 limit(20000, 0);
+        memWriteLev =   (mic3 + mic4) : integrator(.1) : delayfb(.01,.9) :
+                        LPButterworthN(5, 25) :
+                        \(x).(1 - (inspect(100, -10, 10, x * x))) : 
+                        // LIMIT - max - min
+                        limit(1, 0);
+        memWriteDel1 =  memWriteLev : @(ba.sec2samp(var1 / 2)) : 
+                        // LIMIT - max - min
+                        limit(1, 0);
+        memWriteDel2 =  memWriteLev : @(ba.sec2samp(var1 / 3)) : 
+                        // LIMIT - max - min
+                        limit(1, 0);
+        cntrlMain = (mic3 + mic4) * SenstoExt : integrator(.01) :
+                    delayfb(.01,.995) : LPButterworthN(5, 25) : 
+                    // LIMIT - max - min
+                    limit(1, 0);
         cntrlLev1 = cntrlMain : @(ba.sec2samp(var1 / 3)) : 
-                // LIMIT - max - min
-                limit(1, 0);
+                    // LIMIT - max - min
+                    limit(1, 0);
         cntrlLev2 = cntrlMain : @(ba.sec2samp(var1 / 2)) : 
-                // LIMIT - max - min
-                limit(1, 0);
+                    // LIMIT - max - min
+                    limit(1, 0);
         cntrlFeed = cntrlMain : \(x).(ba.if(x <= .5, 1.0, (1.0 - x) * 2.0)) : 
-                // LIMIT - max - min
-                limit(1, 0);
+                    // LIMIT - max - min
+                    limit(1, 0);
     };
 //
 signalflow1b(
@@ -160,9 +156,9 @@ signalflow1b(
                         cntrlMic1, cntrlMic2, directLevel, timeIndex1,
                         timeIndex2, triangle1, triangle2, triangle3
     with{
-        cntrlMic(x) =
-            x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
-                integrator(.01) : delayfb(.01,cntrlMicFB) : LPButterworthN(5, .5);
+        cntrlMic(x) =   x : HPButterworthN(1, 50) : LPButterworthN(1, 6000) : 
+                integrator(.01) : delayfb(.01,cntrlMicFB) : 
+                LPButterworthN(5, .5);
         cntrlMic1 = mic1 : cntrlMic : 
         // LIMIT - max - min
         limit(1, 0);
